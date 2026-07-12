@@ -1475,11 +1475,14 @@ test("renders interactive cleanup candidates", async () => {
   assert.match(confirmScreen, /You are going to remove 1 skill from active use/);
   assert.match(confirmScreen, /stale-skill/);
   assert.match(confirmScreen, /paths: .*stale-skill\/SKILL\.md/);
-  assert.match(confirmScreen, /Removed description tokens: \d+ per future skill-catalog load/);
-  assert.match(confirmScreen, /Potential new-chat savings: 11 x 2 new chats in last 30 days = 22 tokens/);
-  assert.match(confirmScreen, /Selected uses in last 30 days: 0/);
-  assert.match(confirmScreen, /Observed selected-use prompt cost: 0 tokens/);
-  assert.match(confirmScreen, /Selected mentions in window: 0 \(not counted as use\)/);
+  assert.match(confirmScreen, /Estimated impact:/);
+  assert.match(confirmScreen, /11 tokens saved per new conversation/);
+  assert.match(confirmScreen, /2 conversations in the last 30 days/);
+  assert.match(confirmScreen, /≈ 22 tokens saved per month/);
+  assert.match(confirmScreen, /Recent activity:/);
+  assert.match(confirmScreen, /Uses\s+None/);
+  assert.match(confirmScreen, /Mentions\s+None/);
+  assert.doesNotMatch(confirmScreen, /skill-catalog load|Observed selected-use prompt cost/);
   assert.match(confirmScreen, /Press Enter to quarantine/);
   assert.match(confirmScreen, /Press d for permanent delete/);
 
@@ -1662,9 +1665,9 @@ test("interactive e2e selects with enter and quarantines confirmed rows", async 
   press(stdin, "enter", "\r");
   await waitForOutput(stdout, /skillkill confirm cleanup/);
   assert.match(stdout.output, /You are going to remove 1 skill from active use/);
-  assert.match(stdout.output, /Removed description tokens: 11 per future skill-catalog load/);
-  assert.match(stdout.output, /Potential new-chat savings: 11 x 1 new chat in last 30 days = 11 tokens/);
-  assert.match(stdout.output, /Observed selected-use prompt cost: 0 tokens/);
+  assert.match(stdout.output, /11 tokens saved per new conversation/);
+  assert.match(stdout.output, /1 conversation in the last 30 days/);
+  assert.match(stdout.output, /≈ 11 tokens saved per month/);
   press(stdin, "down");
   await waitForOutput(stdout, /Press Enter to quarantine, d to delete permanently, or Esc to review/);
   press(stdin, "enter", "\r");

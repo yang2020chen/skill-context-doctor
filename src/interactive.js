@@ -241,10 +241,6 @@ function tokenImpact(picked, state = {}) {
     selectedRecentMentions,
     savingsDays: state.savingsDays ?? 30,
     potentialNewChatSavings: removedTokens * recentNewChats,
-    observedSelectedUseTokens: picked.reduce(
-      (sum, row) => sum + row.description_token_cost * row.recent_usage_count,
-      0,
-    ),
   };
 }
 
@@ -443,7 +439,7 @@ function renderConfirmationScreen(rows, state = {}, dimensions = {}) {
   const deleteMode = Boolean(state.deleteMode);
   const height = Math.max(10, dimensions.rows || 24);
   const width = Math.max(72, dimensions.columns || 100);
-  const visibleSkills = Math.max(1, Math.floor((height - 13) / 2));
+  const visibleSkills = Math.max(1, Math.floor((height - 15) / 2));
   const shown = picked.slice(0, visibleSkills);
   const hidden = Math.max(0, picked.length - shown.length);
   const impact = tokenImpact(picked, state);
@@ -479,12 +475,16 @@ function renderConfirmationScreen(rows, state = {}, dimensions = {}) {
 
   lines.push(
     "",
-    color.header("Token effect:"),
-    `  Removed description tokens: ${color.token(formatNumber(impact.removedTokens))} per future skill-catalog load`,
-    `  Potential new-chat savings: ${color.token(formatNumber(impact.removedTokens))} x ${color.info(formatNumber(impact.recentNewChats))} new ${plural(impact.recentNewChats, "chat")} in last ${formatNumber(impact.savingsDays)} days = ${color.good(formatNumber(impact.potentialNewChatSavings))} tokens`,
-    `  Selected uses in last ${formatNumber(impact.savingsDays)} days: ${color.info(formatNumber(impact.selectedRecentUsage))}`,
-    `  Observed selected-use prompt cost: ${color.token(formatNumber(impact.observedSelectedUseTokens))} tokens`,
-    `  Selected mentions in window: ${color.dim(formatNumber(impact.selectedRecentMentions))} (not counted as use)`,
+    color.header("Estimated impact:"),
+    `  ${color.token(formatNumber(impact.removedTokens))} ${plural(impact.removedTokens, "token")} saved per new conversation`,
+    `  ${color.info(formatNumber(impact.recentNewChats))} ${plural(impact.recentNewChats, "conversation")} in the last ${formatNumber(impact.savingsDays)} days`,
+    impact.savingsDays === 30
+      ? `  ${color.good(`≈ ${formatNumber(impact.potentialNewChatSavings)} tokens saved per month`)}`
+      : `  ${color.good(`≈ ${formatNumber(impact.potentialNewChatSavings)} tokens saved in this ${formatNumber(impact.savingsDays)}-day window`)}`,
+    "",
+    color.header("Recent activity:"),
+    `  Uses       ${impact.selectedRecentUsage ? color.info(formatNumber(impact.selectedRecentUsage)) : color.dim("None")}`,
+    `  Mentions   ${impact.selectedRecentMentions ? color.info(formatNumber(impact.selectedRecentMentions)) : color.dim("None")}`,
     "",
     deleteMode
       ? `${color.danger("Type DELETE then press Enter to permanently delete.")} ${color.dim("Press Esc to return to review.")}`
