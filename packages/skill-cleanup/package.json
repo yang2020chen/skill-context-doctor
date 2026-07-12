@@ -1,6 +1,6 @@
 {
   "name": "skill-cleanup",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Alias package for skillkill.",
   "type": "module",
   "repository": {
