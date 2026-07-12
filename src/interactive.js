@@ -317,10 +317,10 @@ export function renderInteractiveScreen(rows, state = {}, dimensions = {}) {
     ),
     "",
     color.header(
-      `   sel ${clip("risk", riskWidth)} ${clip("tokens", tokenWidth)} ${clip(`${windowDays}d burn`, burnWidth)} ${clip("skill", nameWidth)} ${clip("last use", lastUseWidth)} ${clip("installed", installedWidth)} ${clip("sources", sourcesWidth)}`,
+      `   sel ${clip("skill", nameWidth)} ${clip("risk", riskWidth)} ${clip("tokens", tokenWidth)} ${clip(`${windowDays}d burn`, burnWidth)} ${clip("last use", lastUseWidth)} ${clip("installed", installedWidth)} ${clip("sources", sourcesWidth)}`,
     ),
     color.dim(
-      `   --- ${"-".repeat(riskWidth)} ${"-".repeat(tokenWidth)} ${"-".repeat(burnWidth)} ${"-".repeat(nameWidth)} ${"-".repeat(lastUseWidth)} ${"-".repeat(installedWidth)} ${"-".repeat(sourcesWidth)}`,
+      `   --- ${"-".repeat(nameWidth)} ${"-".repeat(riskWidth)} ${"-".repeat(tokenWidth)} ${"-".repeat(burnWidth)} ${"-".repeat(lastUseWidth)} ${"-".repeat(installedWidth)} ${"-".repeat(sourcesWidth)}`,
     ),
   ];
 
@@ -344,7 +344,7 @@ export function renderInteractiveScreen(rows, state = {}, dimensions = {}) {
         : clip(row.skill, nameWidth);
       const burnTokens = row.description_token_cost * recentNewChats;
       lines.push(
-        `${active} ${mark} ${color.risk(clip(row.risk, riskWidth), row.risk)} ${color.token(clip(formatNumber(row.description_token_cost), tokenWidth))} ${color.usage(clip(formatNumber(burnTokens), burnWidth), burnTokens)} ${skill} ${compactLastUseCell(row, lastUseWidth, links)} ${clip(formatDateOnly(row.installed_at), installedWidth)} ${color.dim(installSourcesCell(row, sourcesWidth))}`,
+        `${active} ${mark} ${skill} ${color.risk(clip(row.risk, riskWidth), row.risk)} ${color.token(clip(formatNumber(row.description_token_cost), tokenWidth))} ${color.usage(clip(formatNumber(burnTokens), burnWidth), burnTokens)} ${compactLastUseCell(row, lastUseWidth, links)} ${clip(formatDateOnly(row.installed_at), installedWidth)} ${color.dim(installSourcesCell(row, sourcesWidth))}`,
       );
     }
   }

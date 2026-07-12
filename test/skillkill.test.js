@@ -1428,12 +1428,12 @@ test("renders interactive cleanup candidates", async () => {
   assert.doesNotMatch(screen, /stale skill cleanup, with receipts/);
   assert.match(screen, /interactive cleanup/);
   assert.match(screen, /2 cleanup candidates/);
-  assert.match(screen, /risk\s+tokens\s+30d burn\s+skill\s+last use\s+installed\s+sources/);
+  assert.match(screen, /sel\s+skill\s+risk\s+tokens\s+30d burn\s+last use\s+installed\s+sources/);
   assert.doesNotMatch(screen, /\x1b\[/);
   assert.doesNotMatch(screen, /status/);
   assert.doesNotMatch(screen, /last strong use/);
   assert.doesNotMatch(screen, /cleanup reason/);
-  assert.match(screen, /\[x\] low\s+\d+\s+22\s+stale-skill/);
+  assert.match(screen, /\[x\] stale-skill\s+low\s+\d+\s+22/);
   assert.doesNotMatch(screen, /2026-04-01 00:00:00/);
   assert.match(screen, /used \d+ days ago/);
   assert.match(screen, /skills\s*$/m);
