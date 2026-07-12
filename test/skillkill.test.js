@@ -261,6 +261,170 @@ test("builds rows from verified Codex and Claude evidence", async () => {
   assert.equal(rows[0].cleanup_candidate, true);
 });
 
+test("preserves Codex tool-call context when scanning large histories", async () => {
+  const fixture = makeFixture();
+  fixture.writeSkill("large-history-read");
+  const sessionsDir = path.join(fixture.codexDir, "sessions");
+  const largeHistory = path.join(sessionsDir, "large-history.jsonl");
+  fs.writeFileSync(largeHistory, "");
+  fs.truncateSync(largeHistory, 51 * 1024 * 1024);
+  fs.appendFileSync(
+    path.join(sessionsDir, "session.jsonl"),
+    `\n${JSON.stringify({
+      timestamp: "2026-06-14T12:34:56Z",
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call",
+        name: "exec",
+        input: `sed -n '1,240p' ${fixture.skillPath("large-history-read")}`,
+      },
+    })}\n`,
+  );
+
+  const skills = collectSkills(fixture.skillsDir);
+  await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "codex",
+  });
+  const row = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((item) => item.skill === "large-history-read");
+
+  assert.equal(row.codex_usage_count, 1);
+  assert.equal(row.last_used, "2026-06-14 12:34:56");
+});
+
+test("does not count Codex command names echoed by tool output", async () => {
+  const fixture = makeFixture();
+  fixture.writeSkill("echoed-command-name");
+  fs.appendFileSync(
+    path.join(fixture.codexDir, "sessions", "session.jsonl"),
+    `\n${JSON.stringify({
+      timestamp: "2026-06-14T12:34:56Z",
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call_output",
+        output: "search result: <command-name>echoed-command-name</command-name>",
+      },
+    })}`,
+  );
+
+  const skills = collectSkills(fixture.skillsDir);
+  await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "codex",
+  });
+  const row = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((item) => item.skill === "echoed-command-name");
+
+  assert.equal(row.codex_usage_count, 0);
+  assert.equal(row.last_used, "");
+});
+
+test("preserves Claude tool-read context in large transcript records", async () => {
+  const fixture = makeFixture();
+  fixture.writeSkill("large-claude-read");
+  fs.appendFileSync(
+    path.join(fixture.claudeDir, "projects", "project.jsonl"),
+    `${JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-06-14T11:22:33Z",
+      padding: "x".repeat(12_000),
+      message: {
+        content: [{
+          type: "tool_use",
+          name: "Read",
+          input: { file_path: fixture.skillPath("large-claude-read") },
+        }],
+      },
+    })}\n`,
+  );
+
+  const skills = collectSkills(fixture.skillsDir);
+  await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "claude",
+  });
+  const row = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((item) => item.skill === "large-claude-read");
+
+  assert.equal(row.claude_usage_count, 1);
+  assert.equal(row.last_used, "2026-06-14 11:22:33");
+});
+
+test("does not count Claude command names echoed by tool results", async () => {
+  const fixture = makeFixture();
+  fixture.writeSkill("echoed-claude-command");
+  fs.appendFileSync(
+    path.join(fixture.claudeDir, "projects", "project.jsonl"),
+    `${JSON.stringify({
+      type: "user",
+      timestamp: "2026-06-14T11:22:33Z",
+      message: {
+        content: [{
+          type: "tool_result",
+          content: "search result: <command-name>echoed-claude-command</command-name>",
+        }],
+      },
+    })}\n`,
+  );
+
+  const skills = collectSkills(fixture.skillsDir);
+  await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "claude",
+  });
+  const row = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((item) => item.skill === "echoed-claude-command");
+
+  assert.equal(row.claude_usage_count, 0);
+  assert.equal(row.last_used, "");
+});
+
+test("detects Claude Pathgrade tool events from live CLI snapshots", async () => {
+  const fixture = makeFixture();
+  fixture.writeSkill("pathgrade-live-skill");
+  fs.appendFileSync(
+    path.join(fixture.claudeDir, "projects", "project.jsonl"),
+    `${JSON.stringify({
+      type: "tool_event",
+      timestamp: "2026-06-14T10:11:12Z",
+      tool_event: {
+        action: "use_skill",
+        provider: "claude",
+        providerToolName: "Read",
+        arguments: { file_path: fixture.skillPath("pathgrade-live-skill") },
+        skillName: "pathgrade-live-skill",
+      },
+    })}\n`,
+  );
+
+  const skills = collectSkills(fixture.skillsDir);
+  await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "claude",
+  });
+  const row = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((item) => item.skill === "pathgrade-live-skill");
+
+  assert.equal(row.claude_usage_count, 1);
+  assert.equal(row.last_used, "2026-06-14 10:11:12");
+});
+
 test("tracks Claude app, OpenCode, Cursor, and custom evidence signals", async () => {
   const fixture = makeFixture();
   for (const name of [

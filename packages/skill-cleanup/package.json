@@ -1,6 +1,6 @@
 {
   "name": "skill-cleanup",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Alias package for skillkill.",
   "type": "module",
   "repository": {
@@ -23,7 +23,7 @@
     "build": "npm pack --dry-run"
   },
   "dependencies": {
-    "skillkill": "0.3.4"
+    "skillkill": "0.3.5"
   },
   "license": "MIT"
 }

@@ -35,7 +35,6 @@ const READ_COMMAND_RE = new RegExp(
   String.raw`\b${READ_COMMAND_PATTERN}\b[\s\S]*\/SKILL\.md\b`,
 );
 const COMMAND_NAME_RE = /<command-name>([^<]+)<\/command-name>/g;
-const MAX_PREFILTERED_JSON_LINE_LENGTH = 10_000;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -170,6 +169,40 @@ function fileTitle(file) {
 
 function chatTitle(record, file) {
   return recordTitle(record) || fileTitle(file);
+}
+
+function codexUsageText(record, rawLine) {
+  if (!record) return rawLine;
+  const payloadType = record.payload?.type;
+  if (["custom_tool_call_output", "function_call_output"].includes(payloadType)) return "";
+  if (["custom_tool_call", "function_call"].includes(payloadType)) {
+    return jsonStrings(record.payload?.input ?? record.payload?.arguments).join("\n");
+  }
+  return jsonStrings(record).join("\n");
+}
+
+function claudeUsageText(record, rawLine) {
+  if (!record) return rawLine;
+  const values = [];
+  if (typeof record.command === "string") values.push(record.command);
+  if (record.input !== undefined) jsonStrings(record.input, values);
+  if (typeof record.message === "string") values.push(record.message);
+
+  const visitContent = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(visitContent);
+      return;
+    }
+    if (!value || typeof value !== "object" || value.type === "tool_result") return;
+    if (value.type === "tool_use") {
+      jsonStrings(value.input, values);
+      return;
+    }
+    if (value.type === "text" && typeof value.text === "string") values.push(value.text);
+    Object.values(value).forEach(visitContent);
+  };
+  visitContent(record.message?.content);
+  return values.join("\n");
 }
 
 function fileTimestamp(file) {
@@ -327,6 +360,7 @@ function structuredToolName(record) {
     (record.type === "tool_use" ? record.name : undefined) ??
     record.name ??
     record.toolName ??
+    record.providerToolName ??
     record.function?.name ??
     record.toolCall?.name ??
     record.toolCall?.toolName ??
@@ -866,11 +900,6 @@ function scanClaudeSkillUsageConfig(skills, options, stats, aliases) {
 
 function processMatchedJsonLine(item, stats, onRecord) {
   stats.matchedLines += 1;
-  if (item.line.length > MAX_PREFILTERED_JSON_LINE_LENGTH) {
-    stats.parsedRecords += 1;
-    onRecord(null, item.file, item.lineNo, item.line);
-    return;
-  }
   let record;
   try {
     record = JSON.parse(item.line);
@@ -944,11 +973,14 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
             shellQuote(pattern.prefilter),
             ...roots.map(shellQuote),
             "|",
+            "rg -F",
+            shellQuote('"type":"response_item"'),
+            "|",
+            "rg -v -e",
+            shellQuote('"type":"(?:custom_tool_call_output|function_call_output)"|"role":"developer"'),
+            "|",
             "rg -F -f",
             shellQuote(patternFile),
-            "|",
-            "perl -ne",
-            shellQuote('if (/^(.*?:\\d+:).*?(\\/skills\\/[^\\/"<>\\s]+\\/(?:SKILL\\.md|scripts\\/)|<command-name>[^<]+<\\/command-name>)/) { print "$1$2\\n" }'),
           ].join(" "),
         ],
         { stdio: ["ignore", "pipe", "ignore"] },
@@ -973,7 +1005,6 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
 
   const seen = new Set();
   const matchedFiles = new Set();
-  const compactOnly = usePipeline;
   const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
 
   try {
@@ -985,18 +1016,12 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
       const lineNo = Number(match[2]);
       const line = match[3];
       if (!file || Number.isNaN(lineNo)) continue;
-      if (compactOnly && !shouldProcessRaw(line)) continue;
+      if (!shouldProcessRaw(line)) continue;
       const key = `${file}:${lineNo}`;
       if (seen.has(key)) continue;
       seen.add(key);
       matchedFiles.add(file);
-      if (compactOnly) {
-        stats.matchedLines += 1;
-        stats.parsedRecords += 1;
-        onRecord(null, file, lineNo, line);
-      } else {
-        processMatchedJsonLine({ file, lineNo, line }, stats, onRecord);
-      }
+      processMatchedJsonLine({ file, lineNo, line }, stats, onRecord);
     }
   } finally {
     rl.close();
@@ -1370,9 +1395,10 @@ async function scanCodex(skills, options, stats) {
     (record, file, lineNo, rawLine) => {
       const ts = record ? timestampFromRecord(record) : fileTimestamp(file);
       const text = record ? jsonStrings(record).join("\n") : rawLine;
+      const usageText = codexUsageText(record, rawLine);
       let usageEventCount = 0;
 
-      for (const blockMatch of text.matchAll(SKILL_BLOCK_RE)) {
+      for (const blockMatch of usageText.matchAll(SKILL_BLOCK_RE)) {
         const name = blockMatch[1]?.trim();
         const skillPath = blockMatch[2]?.trim();
         if (!name || !skillPath) continue;
@@ -1398,7 +1424,7 @@ async function scanCodex(skills, options, stats) {
         }
       }
 
-      usageEventCount += addReadCommandSkillEvidence(skills, options, text, {
+      usageEventCount += addReadCommandSkillEvidence(skills, options, usageText, {
         ts,
         kind: "codex_skill_read_command",
         source: sourcePointer(file, lineNo),
@@ -1407,7 +1433,7 @@ async function scanCodex(skills, options, stats) {
         chatTitle: chatTitle(record, file),
         stats: stats.codex,
       });
-      usageEventCount += addScriptCommandSkillEvidence(skills, text, {
+      usageEventCount += addScriptCommandSkillEvidence(skills, usageText, {
         ts,
         kind: "codex_skill_script_command",
         source: sourcePointer(file, lineNo),
@@ -1416,7 +1442,7 @@ async function scanCodex(skills, options, stats) {
         chatTitle: chatTitle(record, file),
         stats: stats.codex,
       });
-      usageEventCount += addCommandNameSkillEvidence(skills, text, {
+      usageEventCount += addCommandNameSkillEvidence(skills, usageText, {
         ts,
         kind: "codex_command_name_skill",
         source: sourcePointer(file, lineNo),
@@ -1527,6 +1553,7 @@ async function scanClaude(skills, options, stats) {
     }
 
     const text = record ? jsonStrings(record).join("\n") : rawLine;
+    const usageText = claudeUsageText(record, rawLine);
     usageEventCount += record ? addStructuredSkillToolEvidence(skills, record, {
       ts,
       kind: "claude_skill_tool",
@@ -1547,7 +1574,7 @@ async function scanClaude(skills, options, stats) {
       aliases,
       stats: stats.claude,
     }) : 0;
-    usageEventCount += addCommandNameSkillEvidence(skills, text, {
+    usageEventCount += addCommandNameSkillEvidence(skills, usageText, {
       ts,
       kind: "claude_command_name_skill",
       source: sourcePointer(file, lineNo),
@@ -1567,7 +1594,7 @@ async function scanClaude(skills, options, stats) {
       aliases,
       stats: stats.claude,
     }) : 0;
-    usageEventCount += addReadCommandSkillEvidence(skills, options, text, {
+    usageEventCount += addReadCommandSkillEvidence(skills, options, usageText, {
       ts,
       kind: "claude_skill_read_command",
       source: sourcePointer(file, lineNo),
@@ -1577,7 +1604,7 @@ async function scanClaude(skills, options, stats) {
       aliases,
       stats: stats.claude,
     });
-    usageEventCount += addScriptCommandSkillEvidence(skills, text, {
+    usageEventCount += addScriptCommandSkillEvidence(skills, usageText, {
       ts,
       kind: "claude_skill_script_command",
       source: sourcePointer(file, lineNo),
