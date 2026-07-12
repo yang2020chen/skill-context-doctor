@@ -8,6 +8,10 @@ through an undoable quarantine.
 The design goal is boring safety: preview first, explicit cleanup, and a restore
 path if something was moved by mistake.
 
+## Interactive Review
+
+![skillkill interactive review showing cleanup candidates, token cost, recent usage, and install sources](assets/skillkill-interactive-review.png)
+
 ## Quick Start
 
 Run without installing:
