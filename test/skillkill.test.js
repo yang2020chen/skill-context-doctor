@@ -264,6 +264,26 @@ test("builds rows from verified Codex and Claude evidence", async () => {
   assert.equal(rows[0].cleanup_candidate, true);
 });
 
+test("does not count model-disabled skill descriptions as catalog token cost", () => {
+  const fixture = makeFixture();
+  const disabledPath = fixture.writeSkill("manual-only");
+  fs.writeFileSync(
+    disabledPath,
+    "---\nname: manual-only\ndescription: A detailed skill description that is only loaded when explicitly requested.\ndisable-model-invocation: true\n---\n# Manual only\n",
+  );
+
+  const rows = buildRows(collectSkills(fixture.skillsDir), {
+    unusedDays: 45,
+    unusedInstalledDays: 0,
+    now: NOW,
+  });
+  const byName = new Map(rows.map((row) => [row.skill, row]));
+
+  assert.equal(byName.get("manual-only").disable_model_invocation, true);
+  assert.equal(byName.get("manual-only").description_token_cost, 0);
+  assert.equal(byName.get("stale-skill").description_token_cost > 0, true);
+});
+
 test("replays unchanged history and rescans only changed files", async () => {
   const fixture = makeFixture();
   fs.writeFileSync(path.join(fixture.codexDir, "sessions", "unchanged.jsonl"), "{}\n");

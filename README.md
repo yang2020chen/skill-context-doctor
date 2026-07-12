@@ -120,7 +120,9 @@ skillkill undo latest
 ```
 
 Rows include `risk`, `description_token_cost`, and `used_window_tokens`. Token
-cost is a rough estimate from the skill `description` frontmatter field.
+cost is a rough estimate from the skill `description` frontmatter field. Skills
+with `disable-model-invocation: true` report zero description-token cost because
+their descriptions are not loaded into the model-visible skill catalog.
 `used_window_tokens` is observed cost from usage events in the current
 `--savings-days` window. Human tables show `30d burn` by default: each skill's
 description tokens multiplied by distinct new local chat/session artifacts found

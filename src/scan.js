@@ -324,6 +324,10 @@ function readSkillMetadata(file) {
   }
 }
 
+function frontmatterBoolean(value) {
+  return typeof value === "boolean" ? value : String(value || "").toLowerCase() === "true";
+}
+
 function addStrategy(stats, strategy) {
   if (stats.strategy === "not-run") {
     stats.strategy = strategy;
@@ -495,6 +499,7 @@ export function collectSkills(skillsDirs) {
       linkTarget: isSymlink ? fs.realpathSync(skillDir) : "",
       fingerprint: directoryFingerprint(skillDir),
       description: typeof metadata.description === "string" ? metadata.description : "",
+      disableModelInvocation: frontmatterBoolean(metadata["disable-model-invocation"]),
       atime: stat.atime,
       birthtime: isSymlink ? linkStat.birthtime : stat.birthtime,
       mtime: stat.mtime,

@@ -210,7 +210,9 @@ export function buildRows(skills, options) {
       const recentUsageEvents = recent(usage.usageEvents, now, savingsDays);
       const recentMentions = recent(usage.mentions, now, savingsDays);
       const usageEvents14d = recent(usage.usageEvents, now, usageTokenWindowDays);
-      const descriptionTokenCost = estimateDescriptionTokens(usage.description);
+      const descriptionTokenCost = usage.disableModelInvocation
+        ? 0
+        : estimateDescriptionTokens(usage.description);
       const codexUsageCount = usage.usageEvents.filter((item) =>
         item.kind.startsWith("codex_"),
       ).length;
@@ -288,6 +290,7 @@ export function buildRows(skills, options) {
         is_symlink: Boolean(usage.isSymlink),
         link_target: usage.linkTarget || "",
         description: usage.description || "",
+        disable_model_invocation: Boolean(usage.disableModelInvocation),
         description_token_cost: descriptionTokenCost,
         usage_count: usage.usageEvents.length,
         mention_count: usage.mentions.length,
