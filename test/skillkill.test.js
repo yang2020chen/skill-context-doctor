@@ -1592,6 +1592,8 @@ test("renders interactive loading screen before evidence is ready", () => {
   assert.match(screen, /Scanning agent history/);
   assert.match(screen, /Codex · 416 skills found/);
   assert.match(screen, /12s elapsed/);
+  assert.match(screen, /First scan may take 1–3 minutes/);
+  assert.match(screen, /Later scans only process changed history/);
   assert.doesNotMatch(screen, /review table will appear/);
   assert.doesNotMatch(screen, /preview-only/);
 });

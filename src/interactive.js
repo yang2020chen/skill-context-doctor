@@ -395,8 +395,9 @@ export function renderInteractiveLoadingScreen(state = {}, dimensions = {}) {
     "",
     color.info(`${spinner} ${status || "Scanning skill usage"}`),
     details ? color.dim(details) : "",
+    color.dim("First scan may take 1–3 minutes. Later scans only process changed history."),
   ];
-  if (elapsedSeconds >= 10) lines.push(color.dim("Large histories can take a while. Press Ctrl+C to stop."));
+  if (elapsedSeconds >= 10) lines.push(color.dim("Press Ctrl+C to stop."));
   return `${lines.join("\n")}\n`;
 }
 
