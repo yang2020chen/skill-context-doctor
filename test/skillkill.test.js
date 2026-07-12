@@ -18,6 +18,7 @@ import {
 import { buildRows } from "../src/model.js";
 import { loadOmitPatterns } from "../src/omit.js";
 import { collectSkills, scanEvidence } from "../src/scan.js";
+import { scanSkillsInWorker } from "../src/scan-worker.js";
 import { quarantineCandidates } from "../src/quarantine.js";
 import { renderInteractiveUndoScreen } from "../src/undo-interactive.js";
 import { formatCommands, formatTable } from "../src/output.js";
@@ -165,6 +166,8 @@ function makeVercelLockEntry(skillName) {
 
 test("defaults to common installed skill roots and allows repeatable path overrides", () => {
   const defaults = parseArgs([]);
+  assert.equal(defaults.cache, true);
+  assert.equal(parseArgs(["--no-cache"]).cache, false);
   assert.equal(defaults.skillsDirs.some((item) => item.endsWith("/.agents/skills")), true);
   assert.equal(defaults.skillsDirs.some((item) => item.endsWith("/.claude/skills")), true);
   assert.equal(defaults.skillsDirs.some((item) => item.endsWith("/.codex/skills")), true);
@@ -259,6 +262,103 @@ test("builds rows from verified Codex and Claude evidence", async () => {
 
   assert.equal(byName.get(".system-skill").cleanup_candidate, false);
   assert.equal(rows[0].cleanup_candidate, true);
+});
+
+test("replays unchanged history and rescans only changed files", async () => {
+  const fixture = makeFixture();
+  fs.writeFileSync(path.join(fixture.codexDir, "sessions", "unchanged.jsonl"), "{}\n");
+  const options = {
+    skillsDir: fixture.skillsDir,
+    skillsDirs: [fixture.skillsDir],
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    opencodeDir: fixture.opencodeDir,
+    cursorDir: fixture.cursorDir,
+    evidenceDirs: [],
+    stateDir: fixture.stateDir,
+    source: "all",
+    fullScan: true,
+    cache: true,
+    now: NOW,
+  };
+  const coldSkills = collectSkills(fixture.skillsDir);
+  const coldStats = await scanEvidence(coldSkills, options);
+  assert.equal(coldStats.codex.scannedFiles > 0, true);
+
+  const warmSkills = collectSkills(fixture.skillsDir);
+  const warmStats = await scanEvidence(warmSkills, options);
+  assert.equal(warmStats.codex.scannedFiles, 0);
+  assert.equal(warmStats.codex.cachedFiles > 0, true);
+  for (const [id, cold] of coldSkills) {
+    const warm = warmSkills.get(id);
+    assert.deepEqual(warm.usageEvents, cold.usageEvents);
+    assert.deepEqual(warm.mentions, cold.mentions);
+  }
+
+  const changedFile = path.join(fixture.codexDir, "sessions", "session.jsonl");
+  fs.appendFileSync(changedFile, `\n${JSON.stringify({ timestamp: "2026-06-15T00:00:00Z", message: "no skill evidence" })}\n`);
+  const changedSkills = collectSkills(fixture.skillsDir);
+  const changedStats = await scanEvidence(changedSkills, options);
+  assert.equal(changedStats.codex.scannedFiles, 1);
+  assert.equal(changedStats.codex.cachedFiles > 0, true);
+  for (const [id, cold] of coldSkills) {
+    assert.deepEqual(changedSkills.get(id).usageEvents, cold.usageEvents);
+    assert.deepEqual(changedSkills.get(id).mentions, cold.mentions);
+  }
+});
+
+test("rescans old history when a skill is newly installed", async () => {
+  const fixture = makeFixture();
+  fs.appendFileSync(
+    path.join(fixture.codexDir, "sessions", "session.jsonl"),
+    `\n${JSON.stringify({ timestamp: "2026-06-14T12:00:00Z", message: "<command-name>future-skill</command-name>" })}\n`,
+  );
+  const options = {
+    skillsDir: fixture.skillsDir,
+    skillsDirs: [fixture.skillsDir],
+    codexDir: fixture.codexDir,
+    stateDir: fixture.stateDir,
+    source: "codex",
+    fullScan: true,
+    cache: true,
+    now: NOW,
+  };
+  await scanEvidence(collectSkills(fixture.skillsDir), options);
+
+  fixture.writeSkill("future-skill");
+  const expandedSkills = collectSkills(fixture.skillsDir);
+  const stats = await scanEvidence(expandedSkills, options);
+  const future = [...expandedSkills.values()].find((skill) => skill.skill === "future-skill");
+  assert.equal(stats.codex.scannedFiles > 0, true);
+  assert.equal(future.usageEvents.some((event) => event.kind === "codex_command_name_skill"), true);
+});
+
+test("keeps the loading event loop responsive while skills are scanned", async () => {
+  const fixture = makeFixture();
+  const largeFile = path.join(path.dirname(fixture.skillPath("never-used")), "large.bin");
+  fs.writeFileSync(largeFile, "");
+  fs.truncateSync(largeFile, 64 * 1024 * 1024);
+  const phases = [];
+  let ticks = 0;
+  const timer = setInterval(() => {
+    ticks += 1;
+  }, 10);
+
+  const result = await scanSkillsInWorker({
+    skillsDirs: [fixture.skillsDir],
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    source: "filesystem",
+  }, (progress) => phases.push(progress.phase));
+  clearInterval(timer);
+
+  assert.equal(result.skills instanceof Map, true);
+  assert.equal(result.skills.size, 5);
+  assert.equal(ticks > 1, true);
+  assert.deepEqual(phases, ["skills", "filesystem", "ranking"]);
 });
 
 test("preserves Codex tool-call context when scanning large histories", async () => {
@@ -690,8 +790,10 @@ test("tracks Claude app, OpenCode, Cursor, and custom evidence signals", async (
     opencodeDir: fixture.opencodeDir,
     cursorDir: fixture.cursorDir,
     evidenceDirs: [fixture.evidenceDir],
+    stateDir: fixture.stateDir,
     source: "all",
     fullScan: false,
+    cache: true,
   });
   const rows = buildRows(skills, {
     unusedDays: 45,
@@ -762,6 +864,28 @@ test("tracks Claude app, OpenCode, Cursor, and custom evidence signals", async (
   assert.equal(stats.opencode.evidence, 3);
   assert.equal(stats.cursor.evidence >= 4, true);
   assert.equal(stats.filesystem.evidence >= 4, true);
+
+  const warmSkills = collectSkills(fixture.skillsDir);
+  const warmStats = await scanEvidence(warmSkills, {
+    skillsDir: fixture.skillsDir,
+    codexDir: fixture.codexDir,
+    claudeDir: fixture.claudeDir,
+    claudeAppDir: fixture.claudeAppDir,
+    opencodeDir: fixture.opencodeDir,
+    cursorDir: fixture.cursorDir,
+    evidenceDirs: [fixture.evidenceDir],
+    stateDir: fixture.stateDir,
+    source: "all",
+    fullScan: false,
+    cache: true,
+  });
+  for (const [id, cold] of skills) {
+    assert.deepEqual(warmSkills.get(id).usageEvents, cold.usageEvents);
+    assert.deepEqual(warmSkills.get(id).mentions, cold.mentions);
+  }
+  for (const source of ["codex", "claude", "opencode", "cursor", "filesystem"]) {
+    assert.equal(warmStats[source].evidence, stats[source].evidence);
+  }
 });
 
 test("collects skills from multiple install roots and matches their path evidence", async () => {
@@ -1457,12 +1581,16 @@ test("renders interactive candidates with selected sort order", () => {
 });
 
 test("renders interactive loading screen before evidence is ready", () => {
-  const screen = renderInteractiveLoadingScreen({ frame: 2 }, { colors: false });
+  const screen = renderInteractiveLoadingScreen(
+    { frame: 2, phase: "codex", skillCount: 416, elapsedMs: 12_000 },
+    { colors: false },
+  );
 
-  assert.match(screen, /interactive cleanup/);
-  assert.match(screen, /Loading skills\.\./);
-  assert.match(screen, /Scanning installed skills and local agent history/);
-  assert.match(screen, /preview-only/);
+  assert.match(screen, /Scanning agent history/);
+  assert.match(screen, /Codex · 416 skills found/);
+  assert.match(screen, /12s elapsed/);
+  assert.doesNotMatch(screen, /review table will appear/);
+  assert.doesNotMatch(screen, /preview-only/);
 });
 
 test("interactive mode defaults only for real terminals", () => {
@@ -1528,7 +1656,7 @@ test("interactive e2e selects with enter and quarantines confirmed rows", async 
     { now: NOW, stdin, stdout, stderr: { write: () => {} } },
   );
 
-  assert.match(stdout.output, /Loading skills/);
+  assert.match(stdout.output, /Finding installed skills/);
   await waitForOutput(stdout, /Keys: \/ search/);
   press(stdin, "space", " ");
   press(stdin, "enter", "\r");

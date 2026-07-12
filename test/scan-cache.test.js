@@ -82,6 +82,18 @@ test("invalidates changed and removed files", () => {
   assert.deepEqual(document.modes.prefilter.files, {});
 });
 
+test("does not cache a history file that changes while it is scanned", () => {
+  const { history, skills, stateDir } = fixture();
+  const cache = createScanCache(skills, { stateDir });
+  const partition = cache.partitionFiles("codex", "jsonl", [history]);
+  fs.appendFileSync(history, "{}\n");
+  cache.capture({ source: "codex", kind: "jsonl", files: partition.dirty, baselines: cache.snapshot() });
+  cache.commit();
+
+  const next = createScanCache(skills, { stateDir });
+  assert.deepEqual(next.partitionFiles("codex", "jsonl", [history]).dirty, [history]);
+});
+
 test("separates full scan mode and invalidates a changed skill inventory", () => {
   const { history, skills, stateDir } = fixture();
   const normal = createScanCache(skills, { stateDir });
@@ -105,6 +117,20 @@ test("separates full scan mode and invalidates a changed skill inventory", () =>
   });
   assert.notEqual(inventorySignature(skills), inventorySignature(expanded));
   assert.deepEqual(createScanCache(expanded, { stateDir }).partitionFiles("codex", "jsonl", [history]).dirty, [history]);
+});
+
+test("invalidates cached Claude evidence when aliases change", () => {
+  const { history, root, skills, stateDir } = fixture();
+  const claudeDir = path.join(root, ".claude");
+  const cache = createScanCache(skills, { stateDir, claudeDir });
+  cache.partitionFiles("claude", "jsonl", [history]);
+  cache.capture({ source: "claude", kind: "jsonl", files: [history], baselines: cache.snapshot() });
+  cache.commit();
+
+  fs.mkdirSync(path.join(claudeDir, "skills"), { recursive: true });
+  fs.symlinkSync(path.dirname(skills.get("root:demo").path), path.join(claudeDir, "skills", "demo-alias"));
+  const changed = createScanCache(skills, { stateDir, claudeDir });
+  assert.deepEqual(changed.partitionFiles("claude", "jsonl", [history]).dirty, [history]);
 });
 
 test("falls back from malformed cache and commits atomically with private permissions", () => {

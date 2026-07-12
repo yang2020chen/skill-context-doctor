@@ -29,6 +29,7 @@ export const DEFAULT_OPTIONS = {
   savingsDays: 30,
   limit: 40,
   fullScan: false,
+  cache: true,
   json: false,
   csv: "",
   snapshot: "",
@@ -135,6 +136,7 @@ Options:
   --apply                         Move cleanup candidates to quarantine
   --undo [latest|RUN_ID|PATH]     Restore a previous cleanup run
   --full-scan                     Parse every JSONL line instead of using ripgrep prefilter
+  --no-cache                      Bypass incremental scan evidence for this run
   -h, --help                      Show help
 
 Default skill roots are ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, and ~/.cursor/skills.
@@ -241,6 +243,8 @@ export function parseArgs(argv) {
       if (value) i += 1;
     } else if (arg === "--full-scan") {
       options.fullScan = true;
+    } else if (arg === "--no-cache") {
+      options.cache = false;
     } else if (arg === "--json") {
       options.json = true;
     } else if (arg === "--help" || arg === "-h") {

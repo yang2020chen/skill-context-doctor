@@ -168,8 +168,16 @@ Interactive omit appends the skill name to `~/.config/skillkill/omit` unless
 | `cleanup --apply`, `--apply` | Move cleanup candidates to quarantine |
 | `undo [latest|RUN_ID|PATH]`, `--undo [latest|RUN_ID|PATH]` | Restore a quarantine run |
 | `--full-scan` | Parse every JSONL line instead of prefiltering |
+| `--no-cache` | Bypass the incremental evidence cache for this run |
 
 Run `skillkill --help` for the complete command reference.
+
+History evidence is cached at `~/.local/state/skillkill/scan-cache-v1.json`.
+Warm runs replay unchanged files and scan only new or changed history files, so
+additional chats mainly affect the first scan or a changed active chat. Installing
+or removing a skill invalidates the cache to ensure older usage for that skill is
+discovered. `--full-scan` keeps its exhaustive parsing behavior in a separate cache;
+use `--no-cache` for a fresh diagnostic scan without replacing the saved cache.
 
 ## Supported Tools
 

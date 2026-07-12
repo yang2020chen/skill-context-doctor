@@ -374,17 +374,33 @@ export function renderInteractiveScreen(rows, state = {}, dimensions = {}) {
 
 export function renderInteractiveLoadingScreen(state = {}, dimensions = {}) {
   const color = colors(Boolean(dimensions.colors));
-  const dots = ".".repeat((state.frame || 0) % 4);
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const spinner = frames[(state.frame || 0) % frames.length];
+  const phaseLabels = new Map([
+    ["skills", "Finding installed skills"],
+    ["codex", "Codex"],
+    ["claude", "Claude"],
+    ["opencode", "OpenCode"],
+    ["cursor", "Cursor"],
+    ["filesystem", "Additional sources"],
+    ["ranking", "Ranking cleanup candidates"],
+  ]);
+  const elapsedSeconds = Math.floor((state.elapsedMs || 0) / 1000);
+  const details = [
+    !["skills", "ranking"].includes(state.phase) ? phaseLabels.get(state.phase) : "",
+    state.skillCount === undefined ? "" : `${formatNumber(state.skillCount)} skills found`,
+    elapsedSeconds > 0 ? `${formatNumber(elapsedSeconds)}s elapsed` : "",
+  ].filter(Boolean).join(" · ");
+  const status = ["skills", "ranking"].includes(state.phase)
+    ? phaseLabels.get(state.phase)
+    : "Scanning agent history";
   const lines = [
     renderLogo({ color: color.title }),
-    color.dim("interactive cleanup"),
     "",
-    color.info(`Loading skills${dots}`),
-    color.dim("Scanning installed skills and local agent history."),
-    color.dim("The review table will appear as soon as candidates are ranked."),
-    "",
-    color.dim("Default run is still preview-only. Cleanup requires selection and confirmation."),
+    color.info(`${spinner} ${status || "Scanning skill usage"}`),
+    details ? color.dim(details) : "",
   ];
+  if (elapsedSeconds >= 10) lines.push(color.dim("Large histories can take a while. Press Ctrl+C to stop."));
   return `${lines.join("\n")}\n`;
 }
 
@@ -392,25 +408,29 @@ export function startInteractiveLoading(options, io = {}) {
   if (!shouldRunInteractive(options, io)) return null;
 
   const stdout = io.stdout || process.stdout;
-  let frame = 0;
+  const state = { frame: 0, phase: "skills", startedAt: Date.now() };
 
   function renderLoading() {
     write(stdout, "\x1b[2J\x1b[H");
     write(
       stdout,
       renderInteractiveLoadingScreen(
-        { frame },
+        { ...state, elapsedMs: Date.now() - state.startedAt },
         {
           colors: shouldUseColor(stdout),
         },
       ),
     );
-    frame += 1;
+    state.frame += 1;
   }
 
   renderLoading();
   const timer = setInterval(renderLoading, 160);
   return {
+    update(nextState) {
+      Object.assign(state, nextState);
+      renderLoading();
+    },
     stop() {
       clearInterval(timer);
     },

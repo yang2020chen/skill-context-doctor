@@ -5,11 +5,27 @@ import path from "node:path";
 const SCHEMA_VERSION = 1;
 const PARSER_VERSION = 1;
 
-export function inventorySignature(skills) {
+function claudeAliasInventory(claudeDir) {
+  const root = claudeDir ? path.join(claudeDir, "skills") : "";
+  if (!root || !fs.existsSync(root)) return [];
+  return fs.readdirSync(root).sort().map((name) => {
+    const aliasPath = path.join(root, name);
+    try {
+      return [name, fs.realpathSync(aliasPath)];
+    } catch {
+      return [name, ""];
+    }
+  });
+}
+
+export function inventorySignature(skills, options = {}) {
   const inventory = [...skills.values()]
     .map(({ id, path: skillPath, realPath, skill }) => ({ id, path: skillPath, realPath, skill }))
     .sort((left, right) => left.id.localeCompare(right.id));
-  return crypto.createHash("sha256").update(JSON.stringify(inventory)).digest("hex");
+  return crypto.createHash("sha256").update(JSON.stringify({
+    inventory,
+    claudeAliases: claudeAliasInventory(options.claudeDir),
+  })).digest("hex");
 }
 
 export function fileFingerprint(file) {
@@ -76,12 +92,13 @@ export function snapshotEvidenceLengths(skills) {
 }
 
 export function createScanCache(skills, options = {}) {
-  const signature = inventorySignature(skills);
+  const signature = inventorySignature(skills, options);
   const cacheFile = options.cacheFile || path.join(options.stateDir, "scan-cache-v1.json");
   const mode = options.fullScan ? "full" : "prefilter";
   const enabled = options.cache !== false;
   const loaded = enabled ? readCache(cacheFile, signature) : null;
   const currentFiles = { ...(loaded?.modes?.[mode]?.files || {}) };
+  const preScanFingerprints = new Map();
 
   function partitionFiles(source, kind, files) {
     const normalized = [...new Set(files.map(normalizedFile))];
@@ -102,6 +119,7 @@ export function createScanCache(skills, options = {}) {
         continue;
       }
       delete currentFiles[file];
+      if (fingerprint) preScanFingerprints.set(file, fingerprint);
       dirty.push(file);
     }
     return { cached, dirty };
@@ -146,7 +164,11 @@ export function createScanCache(skills, options = {}) {
 
     for (const file of dirtyFiles) {
       const fingerprint = fileFingerprint(file);
-      if (!fingerprint) continue;
+      const before = preScanFingerprints.get(file);
+      if (!fingerprint || (before && !sameFingerprint(fingerprint, before))) {
+        delete currentFiles[file];
+        continue;
+      }
       currentFiles[file] = {
         source,
         kind,
