@@ -2,7 +2,8 @@
 
 ![skillkill token-cost receipt logo](assets/skillkill-token-receipt.png)
 
-![Uploading CleanShot 2026-07-13 at 21.52.24@2x.png…]()
+<img width="2070" height="766" alt="CleanShot 2026-07-13 at 21 52 24@2x" src="https://github.com/user-attachments/assets/28775683-7f36-43fa-bcdd-e6c139fa1f43" />
+
 
 Audit local agent skills, find stale or never-used installs, and clean them up
 through an undoable quarantine.
