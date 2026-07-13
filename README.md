@@ -2,8 +2,10 @@
 
 ![skillkill token-cost receipt logo](assets/skillkill-token-receipt.png)
 
-Audit local agent skills, find stale or never-used installs, and clean them up
-through an undoable quarantine.
+**`npkill` for agent skills.**
+
+Find stale or never-used skill installs and clean them up through an undoable
+quarantine.
 
 The design goal is boring safety: preview first, explicit cleanup, and a restore
 path if something was moved by mistake.
