@@ -2,11 +2,10 @@
 
 ![skillkill token-cost receipt logo](assets/skillkill-token-receipt.png)
 
+![Uploading CleanShot 2026-07-13 at 21.52.24@2x.png…]()
+
 Audit local agent skills, find stale or never-used installs, and clean them up
 through an undoable quarantine.
-
-The design goal is boring safety: preview first, explicit cleanup, and a restore
-path if something was moved by mistake.
 
 ## Quick Start
 
