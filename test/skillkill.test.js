@@ -261,6 +261,35 @@ test("builds rows from verified Codex and Claude evidence", async () => {
   assert.equal(rows[0].cleanup_candidate, true);
 });
 
+test("falls back to a full JSONL scan when ripgrep is unavailable", () => {
+  const fixture = makeFixture();
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.resolve("bin/skillkill.js"),
+      "--path",
+      fixture.skillsDir,
+      "--codex-dir",
+      fixture.codexDir,
+      "--source",
+      "codex",
+      "--json",
+      "--no-omit-file",
+    ],
+    {
+      encoding: "utf8",
+      env: { ...process.env, PATH: fixture.root },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  const byName = new Map(payload.rows.map((row) => [row.skill, row]));
+  assert.equal(payload.scan.codex.strategy, "full-jsonl-fallback");
+  assert.equal(byName.get("stale-skill").codex_usage_count, 1);
+  assert.equal(byName.get("mention-only").mention_count, 1);
+});
+
 test("preserves Codex tool-call context when scanning large histories", async () => {
   const fixture = makeFixture();
   fixture.writeSkill("large-history-read");

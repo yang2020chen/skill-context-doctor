@@ -1002,6 +1002,10 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
         ],
         { stdio: ["ignore", "pipe", "ignore"] },
       );
+  const status = new Promise((resolve) => {
+    child.once("error", () => resolve(null));
+    child.once("close", (code) => resolve(code));
+  });
 
   const seen = new Set();
   const matchedFiles = new Set();
@@ -1027,17 +1031,14 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
     rl.close();
   }
 
-  const status = await new Promise((resolve) => {
-    child.on("error", () => resolve(null));
-    child.on("close", (code) => resolve(code));
-  });
+  const exitStatus = await status;
   if (patternFile) {
     try {
       fs.unlinkSync(patternFile);
     } catch {
     }
   }
-  if (![0, 1].includes(status)) return false;
+  if (![0, 1].includes(exitStatus)) return false;
 
   stats.matchedFiles += matchedFiles.size;
   addStrategy(stats, "ripgrep-line-prefilter");
