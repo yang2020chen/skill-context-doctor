@@ -241,10 +241,6 @@ function tokenImpact(picked, state = {}) {
     selectedRecentMentions,
     savingsDays: state.savingsDays ?? 30,
     potentialNewChatSavings: removedTokens * recentNewChats,
-    observedSelectedUseTokens: picked.reduce(
-      (sum, row) => sum + row.description_token_cost * row.recent_usage_count,
-      0,
-    ),
   };
 }
 
@@ -374,17 +370,34 @@ export function renderInteractiveScreen(rows, state = {}, dimensions = {}) {
 
 export function renderInteractiveLoadingScreen(state = {}, dimensions = {}) {
   const color = colors(Boolean(dimensions.colors));
-  const dots = ".".repeat((state.frame || 0) % 4);
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const spinner = frames[(state.frame || 0) % frames.length];
+  const phaseLabels = new Map([
+    ["skills", "Finding installed skills"],
+    ["codex", "Codex"],
+    ["claude", "Claude"],
+    ["opencode", "OpenCode"],
+    ["cursor", "Cursor"],
+    ["filesystem", "Additional sources"],
+    ["ranking", "Ranking cleanup candidates"],
+  ]);
+  const elapsedSeconds = Math.floor((state.elapsedMs || 0) / 1000);
+  const details = [
+    !["skills", "ranking"].includes(state.phase) ? phaseLabels.get(state.phase) : "",
+    state.skillCount === undefined ? "" : `${formatNumber(state.skillCount)} skills found`,
+    elapsedSeconds > 0 ? `${formatNumber(elapsedSeconds)}s elapsed` : "",
+  ].filter(Boolean).join(" · ");
+  const status = ["skills", "ranking"].includes(state.phase)
+    ? phaseLabels.get(state.phase)
+    : "Scanning agent history";
   const lines = [
     renderLogo({ color: color.title }),
-    color.dim("interactive cleanup"),
     "",
-    color.info(`Loading skills${dots}`),
-    color.dim("Scanning installed skills and local agent history."),
-    color.dim("The review table will appear as soon as candidates are ranked."),
-    "",
-    color.dim("Default run is still preview-only. Cleanup requires selection and confirmation."),
+    color.info(`${spinner} ${status || "Scanning skill usage"}`),
+    details ? color.dim(details) : "",
+    color.dim("First scan may take 1–3 minutes. Later scans only process changed history."),
   ];
+  if (elapsedSeconds >= 10) lines.push(color.dim("Press Ctrl+C to stop."));
   return `${lines.join("\n")}\n`;
 }
 
@@ -392,25 +405,29 @@ export function startInteractiveLoading(options, io = {}) {
   if (!shouldRunInteractive(options, io)) return null;
 
   const stdout = io.stdout || process.stdout;
-  let frame = 0;
+  const state = { frame: 0, phase: "skills", startedAt: Date.now() };
 
   function renderLoading() {
     write(stdout, "\x1b[2J\x1b[H");
     write(
       stdout,
       renderInteractiveLoadingScreen(
-        { frame },
+        { ...state, elapsedMs: Date.now() - state.startedAt },
         {
           colors: shouldUseColor(stdout),
         },
       ),
     );
-    frame += 1;
+    state.frame += 1;
   }
 
   renderLoading();
   const timer = setInterval(renderLoading, 160);
   return {
+    update(nextState) {
+      Object.assign(state, nextState);
+      renderLoading();
+    },
     stop() {
       clearInterval(timer);
     },
@@ -423,7 +440,7 @@ function renderConfirmationScreen(rows, state = {}, dimensions = {}) {
   const deleteMode = Boolean(state.deleteMode);
   const height = Math.max(10, dimensions.rows || 24);
   const width = Math.max(72, dimensions.columns || 100);
-  const visibleSkills = Math.max(1, Math.floor((height - 13) / 2));
+  const visibleSkills = Math.max(1, Math.floor((height - 15) / 2));
   const shown = picked.slice(0, visibleSkills);
   const hidden = Math.max(0, picked.length - shown.length);
   const impact = tokenImpact(picked, state);
@@ -459,12 +476,16 @@ function renderConfirmationScreen(rows, state = {}, dimensions = {}) {
 
   lines.push(
     "",
-    color.header("Token effect:"),
-    `  Removed description tokens: ${color.token(formatNumber(impact.removedTokens))} per future skill-catalog load`,
-    `  Potential new-chat savings: ${color.token(formatNumber(impact.removedTokens))} x ${color.info(formatNumber(impact.recentNewChats))} new ${plural(impact.recentNewChats, "chat")} in last ${formatNumber(impact.savingsDays)} days = ${color.good(formatNumber(impact.potentialNewChatSavings))} tokens`,
-    `  Selected uses in last ${formatNumber(impact.savingsDays)} days: ${color.info(formatNumber(impact.selectedRecentUsage))}`,
-    `  Observed selected-use prompt cost: ${color.token(formatNumber(impact.observedSelectedUseTokens))} tokens`,
-    `  Selected mentions in window: ${color.dim(formatNumber(impact.selectedRecentMentions))} (not counted as use)`,
+    color.header("Estimated impact:"),
+    `  ${color.token(formatNumber(impact.removedTokens))} ${plural(impact.removedTokens, "token")} saved per new conversation`,
+    `  ${color.info(formatNumber(impact.recentNewChats))} ${plural(impact.recentNewChats, "conversation")} in the last ${formatNumber(impact.savingsDays)} days`,
+    impact.savingsDays === 30
+      ? `  ${color.good(`≈ ${formatNumber(impact.potentialNewChatSavings)} tokens saved per month`)}`
+      : `  ${color.good(`≈ ${formatNumber(impact.potentialNewChatSavings)} tokens saved in this ${formatNumber(impact.savingsDays)}-day window`)}`,
+    "",
+    color.header("Recent activity:"),
+    `  Uses       ${impact.selectedRecentUsage ? color.info(formatNumber(impact.selectedRecentUsage)) : color.dim("None")}`,
+    `  Mentions   ${impact.selectedRecentMentions ? color.info(formatNumber(impact.selectedRecentMentions)) : color.dim("None")}`,
     "",
     deleteMode
       ? `${color.danger("Type DELETE then press Enter to permanently delete.")} ${color.dim("Press Esc to return to review.")}`

@@ -3,6 +3,7 @@ import { formatCleanupResult } from "./cleanup-result.js";
 import { shouldUseLinks } from "./format.js";
 import { buildRows, payloadFor } from "./model.js";
 import { collectSkills, scanEvidence } from "./scan.js";
+import { scanSkillsInWorker } from "./scan-worker.js";
 import { formatCommands, formatTable, writeCsv, writeSnapshot } from "./output.js";
 import { runInteractive, shouldRunInteractive, startInteractiveLoading } from "./interactive.js";
 import { runInteractiveUndo } from "./undo-interactive.js";
@@ -73,11 +74,22 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return result;
   }
 
+  const interactive = shouldRunInteractive(options, io);
   const loading = startInteractiveLoading(options, io);
-  const skills = collectSkills(options.skillsDirs);
+  let skills;
   let scanStats;
   try {
-    scanStats = await scanEvidence(skills, { ...options, now });
+    if (interactive) {
+      const result = await scanSkillsInWorker(
+        { ...options, now },
+        (progress) => loading?.update(progress),
+      );
+      skills = result.skills;
+      scanStats = result.stats;
+    } else {
+      skills = collectSkills(options.skillsDirs);
+      scanStats = await scanEvidence(skills, { ...options, now });
+    }
   } finally {
     loading?.stop();
   }
@@ -89,7 +101,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   if (options.csv) writeCsv(options.csv, rows);
   if (options.snapshot) writeSnapshot(options.snapshot, payload, options);
 
-  if (shouldRunInteractive(options, io)) {
+  if (interactive) {
     const interactiveResult = await runInteractive(
       rows,
       payload,

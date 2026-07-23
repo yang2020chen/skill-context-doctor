@@ -2,11 +2,17 @@
 
 ![skillkill token-cost receipt logo](assets/skillkill-token-receipt.png)
 
-<img width="2070" height="766" alt="CleanShot 2026-07-13 at 21 52 24@2x" src="https://github.com/user-attachments/assets/28775683-7f36-43fa-bcdd-e6c139fa1f43" />
+**`npkill` for agent skills.**
 
+Find stale or never-used skill installs and clean them up through an undoable
+quarantine.
 
-Audit local agent skills, find stale or never-used installs, and clean them up
-through an undoable quarantine.
+The design goal is boring safety: preview first, explicit cleanup, and a restore
+path if something was moved by mistake.
+
+## Interactive Review
+
+<img width="2070" height="766" alt="skillkill interactive review showing cleanup candidates, token cost, recent usage, and install sources" src="https://github.com/user-attachments/assets/28775683-7f36-43fa-bcdd-e6c139fa1f43" />
 
 ## Quick Start
 
@@ -116,7 +122,9 @@ skillkill undo latest
 ```
 
 Rows include `risk`, `description_token_cost`, and `used_window_tokens`. Token
-cost is a rough estimate from the skill `description` frontmatter field.
+cost is a rough estimate from the skill `description` frontmatter field. Skills
+with `disable-model-invocation: true` report zero description-token cost because
+their descriptions are not loaded into the model-visible skill catalog.
 `used_window_tokens` is observed cost from usage events in the current
 `--savings-days` window. Human tables show `30d burn` by default: each skill's
 description tokens multiplied by distinct new local chat/session artifacts found
@@ -168,8 +176,16 @@ Interactive omit appends the skill name to `~/.config/skillkill/omit` unless
 | `cleanup --apply`, `--apply` | Move cleanup candidates to quarantine |
 | `undo [latest|RUN_ID|PATH]`, `--undo [latest|RUN_ID|PATH]` | Restore a quarantine run |
 | `--full-scan` | Parse every JSONL line instead of prefiltering |
+| `--no-cache` | Bypass the incremental evidence cache for this run |
 
 Run `skillkill --help` for the complete command reference.
+
+History evidence is cached at `~/.local/state/skillkill/scan-cache-v1.json`.
+Warm runs replay unchanged files and scan only new or changed history files, so
+additional chats mainly affect the first scan or a changed active chat. Installing
+or removing a skill invalidates the cache to ensure older usage for that skill is
+discovered. `--full-scan` keeps its exhaustive parsing behavior in a separate cache;
+use `--no-cache` for a fresh diagnostic scan without replacing the saved cache.
 
 ## Supported Tools
 

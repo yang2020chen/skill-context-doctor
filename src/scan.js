@@ -3,6 +3,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
+import { createScanCache } from "./scan-cache.js";
 import { existingRoots, jsonStrings, shellQuote, sourceLabel, walkFiles, withinRoot } from "./fs-utils.js";
 import { ageDays, timestampFromRecord } from "./model.js";
 
@@ -323,6 +324,10 @@ function readSkillMetadata(file) {
   }
 }
 
+function frontmatterBoolean(value) {
+  return typeof value === "boolean" ? value : String(value || "").toLowerCase() === "true";
+}
+
 function addStrategy(stats, strategy) {
   if (stats.strategy === "not-run") {
     stats.strategy = strategy;
@@ -494,6 +499,7 @@ export function collectSkills(skillsDirs) {
       linkTarget: isSymlink ? fs.realpathSync(skillDir) : "",
       fingerprint: directoryFingerprint(skillDir),
       description: typeof metadata.description === "string" ? metadata.description : "",
+      disableModelInvocation: frontmatterBoolean(metadata["disable-model-invocation"]),
       atime: stat.atime,
       birthtime: isSymlink ? linkStat.birthtime : stat.birthtime,
       mtime: stat.mtime,
@@ -968,7 +974,7 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
         [
           "-c",
           [
-            "rg -n --no-heading --color never --no-messages --glob '*.jsonl'",
+            "rg -n --with-filename --no-heading --color never --no-messages --glob '*.jsonl'",
             "-e",
             shellQuote(pattern.prefilter),
             ...roots.map(shellQuote),
@@ -989,6 +995,7 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
         "rg",
         [
           "-n",
+          "--with-filename",
           "--no-heading",
           "--color",
           "never",
@@ -1374,14 +1381,15 @@ function cursorHome(cursorDir) {
 
 async function scanCodex(skills, options, stats) {
   const rootsForSkills = options.skillsDirs || options.skillsDir;
-  const roots = existingRoots([
+  const historyRoots = existingRoots([
     path.join(options.codexDir, "archived_sessions"),
     path.join(options.codexDir, "sessions"),
   ]);
+  const roots = options.scanFiles?.codex?.jsonl || historyRoots;
   addRecentChats(
     stats,
     "codex",
-    countRecentFiles(roots, (file) => file.endsWith(".jsonl"), jsonlStartTimestamp, options),
+    countRecentFiles(historyRoots, (file) => file.endsWith(".jsonl"), jsonlStartTimestamp, options),
   );
   const pattern = {
     prefilter: String.raw`SKILL\.md|/scripts/|<command-name>`,
@@ -1495,12 +1503,13 @@ function claudeAliases(claudeDir, skillsDirs) {
 async function scanClaude(skills, options, stats) {
   const rootsForSkills = options.skillsDirs || options.skillsDir;
   const aliases = claudeAliases(options.claudeDir, rootsForSkills);
-  const jsonlRoots = existingRoots([
+  const historyJsonlRoots = existingRoots([
     path.join(options.claudeDir, "history.jsonl"),
     path.join(options.claudeDir, "projects"),
     path.join(options.claudeAppDir, "claude-code-sessions"),
     path.join(options.claudeAppDir, "local-agent-mode-sessions"),
   ]);
+  const jsonlRoots = options.scanFiles?.claude?.jsonl || historyJsonlRoots;
   const sessionRoots = existingRoots([
     path.join(options.claudeDir, "projects"),
     path.join(options.claudeDir, "tasks"),
@@ -1638,7 +1647,7 @@ async function scanClaude(skills, options, stats) {
   );
 
   await scanMatchingJsonFiles(
-    existingRoots([
+    options.scanFiles?.claude?.json || existingRoots([
       path.join(options.claudeDir, "tasks"),
       path.join(options.claudeDir, "sessions"),
       path.join(options.claudeAppDir, "claude-code-sessions"),
@@ -1655,12 +1664,13 @@ async function scanClaude(skills, options, stats) {
 
 async function scanOpencode(skills, options, stats) {
   const rootsForSkills = options.skillsDirs || options.skillsDir;
-  const roots = existingRoots([
+  const historyRoots = existingRoots([
     path.join(options.opencodeDir, "storage", "message"),
     path.join(options.opencodeDir, "storage", "part"),
     path.join(options.opencodeDir, "storage", "session", "message"),
     path.join(options.opencodeDir, "storage", "session", "part"),
   ]);
+  const roots = options.scanFiles?.opencode?.json || historyRoots;
   addRecentChats(
     stats,
     "opencode",
@@ -1709,7 +1719,7 @@ async function scanCursor(skills, options, stats) {
   addRecentChats(stats, "cursor", countRecentChildDirs([options.cursorDir], options));
 
   await scanMatchingJsonLines(
-    existingRoots([path.join(home, "projects")]),
+    options.scanFiles?.cursor?.jsonl || existingRoots([path.join(home, "projects")]),
     installedSkillPathSearchPattern(skills),
     stats.cursor,
     (record, file, lineNo, rawLine) => {
@@ -1793,14 +1803,14 @@ async function scanFilesystem(skills, options, stats) {
   };
 
   await scanMatchingJsonLines(
-    roots,
+    options.scanFiles?.filesystem?.jsonl || roots,
     "SKILL\\.md",
     stats.filesystem,
     onRecord,
     options.fullScan,
   );
   await scanMatchingJsonFiles(
-    roots,
+    options.scanFiles?.filesystem?.json || roots,
     "SKILL\\.md",
     stats.filesystem,
     onRecord,
@@ -1817,6 +1827,55 @@ async function scanFilesystem(skills, options, stats) {
   );
 }
 
+export function historyFilesBySource(options) {
+  const child = (root, ...parts) => root ? path.join(root, ...parts) : "";
+  const files = (roots, extension) => [
+    ...new Set(
+      existingRoots(roots).flatMap((root) =>
+        walkFiles(root, (file) => file.endsWith(extension)),
+      ),
+    ),
+  ];
+  const cursorHomeDir = options.cursorDir ? cursorHome(options.cursorDir) : "";
+  return {
+    codex: {
+      jsonl: files([
+        child(options.codexDir, "archived_sessions"),
+        child(options.codexDir, "sessions"),
+      ], ".jsonl"),
+    },
+    claude: {
+      jsonl: files([
+        child(options.claudeDir, "history.jsonl"),
+        child(options.claudeDir, "projects"),
+        child(options.claudeAppDir, "claude-code-sessions"),
+        child(options.claudeAppDir, "local-agent-mode-sessions"),
+      ], ".jsonl"),
+      json: files([
+        child(options.claudeDir, "tasks"),
+        child(options.claudeDir, "sessions"),
+        child(options.claudeAppDir, "claude-code-sessions"),
+        child(options.claudeAppDir, "local-agent-mode-sessions"),
+      ], ".json"),
+    },
+    opencode: {
+      json: files([
+        child(options.opencodeDir, "storage", "message"),
+        child(options.opencodeDir, "storage", "part"),
+        child(options.opencodeDir, "storage", "session", "message"),
+        child(options.opencodeDir, "storage", "session", "part"),
+      ], ".json"),
+    },
+    cursor: {
+      jsonl: files([child(cursorHomeDir, "projects")], ".jsonl"),
+    },
+    filesystem: {
+      jsonl: files(options.evidenceDirs || [], ".jsonl"),
+      json: files(options.evidenceDirs || [], ".json"),
+    },
+  };
+}
+
 export function newStats() {
   const scan = () => ({
     strategy: "not-run",
@@ -1827,6 +1886,8 @@ export function newStats() {
     evidence: 0,
     matchedFiles: 0,
     recentNewChats: 0,
+    cachedFiles: 0,
+    scannedFiles: 0,
   });
   return {
     elapsedMs: 0,
@@ -1842,21 +1903,49 @@ export function newStats() {
 export async function scanEvidence(skills, options) {
   const stats = newStats();
   const started = Date.now();
-  if (options.source === "codex" || options.source === "all") {
-    await scanCodex(skills, options, stats);
+  const cache = options.stateDir ? createScanCache(skills, options) : null;
+  const historyFiles = cache ? historyFilesBySource(options) : {};
+  const scanners = new Map([
+    ["codex", scanCodex],
+    ["claude", scanClaude],
+    ["opencode", scanOpencode],
+    ["cursor", scanCursor],
+    ["filesystem", scanFilesystem],
+  ]);
+
+  for (const [source, scanner] of scanners) {
+    if (options.source !== source && options.source !== "all") continue;
+    options.onProgress?.({ phase: source, skillCount: skills.size });
+    const sourceFiles = historyFiles[source] || {};
+    const partitions = new Map();
+    const dirtyFiles = {};
+    for (const [kind, files] of Object.entries(sourceFiles)) {
+      const partition = cache.partitionFiles(source, kind, files);
+      partitions.set(kind, partition);
+      dirtyFiles[kind] = partition.dirty;
+      stats[source].cachedFiles += partition.cached.length;
+      stats[source].scannedFiles += partition.dirty.length;
+      const replayed = cache.replay(partition.cached);
+      stats[source].evidence += replayed;
+      stats[source].matchedFiles += partition.cached.filter(
+        ({ entry }) => entry.contributions?.length > 0,
+      ).length;
+    }
+    const baseline = cache?.snapshot();
+    await scanner(skills, cache ? { ...options, scanFiles: { [source]: dirtyFiles } } : options, stats);
+    for (const [kind, partition] of partitions) {
+      cache.capture({ source, kind, files: partition.dirty, baselines: baseline });
+    }
+    if (cache && stats[source].cachedFiles > 0) addStrategy(stats[source], "incremental-cache");
   }
-  if (options.source === "claude" || options.source === "all") {
-    await scanClaude(skills, options, stats);
+  if (cache) {
+    try {
+      cache.commit();
+    } catch (error) {
+      stats.cacheWarning = error instanceof Error ? error.message : String(error);
+    }
   }
-  if (options.source === "opencode" || options.source === "all") {
-    await scanOpencode(skills, options, stats);
-  }
-  if (options.source === "cursor" || options.source === "all") {
-    await scanCursor(skills, options, stats);
-  }
-  if (options.source === "filesystem" || options.source === "all") {
-    await scanFilesystem(skills, options, stats);
-  }
+  options.onProgress?.({ phase: "ranking", skillCount: skills.size });
   stats.elapsedMs = Date.now() - started;
   return stats;
 }

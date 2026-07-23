@@ -1,6 +1,6 @@
 {
   "name": "skillkill",
-  "version": "0.3.5",
+  "version": "0.3.8",
   "description": "Audit and clean up stale local agent skills.",
   "type": "module",
   "repository": {
@@ -26,10 +26,10 @@
     "skill-prune": "bin/skillkill.js"
   },
   "scripts": {
-    "test": "node --test test/skillkill.test.js",
+    "test": "node --test test/*.test.js",
     "test:pathgrade": "PATHGRADE_CODEX_TRANSPORT=exec pathgrade run --diagnostics -- --config vitest.config.mts",
     "link:local": "node scripts/link-local.mjs",
-    "check": "node --check bin/skillkill.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js && node --check packages/skill-cleanup/bin/skill-cleanup.js && node --check packages/skill-prune/bin/skill-prune.js",
+    "check": "node --check bin/skillkill.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/scan.js && node --check src/scan-cache.js && node --check src/scan-worker.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js && node --check packages/skill-cleanup/bin/skill-cleanup.js && node --check packages/skill-prune/bin/skill-prune.js",
     "lint": "npm run check",
     "build": "npm pack --dry-run && npm pack ./packages/skill-cleanup --dry-run && npm pack ./packages/skill-prune --dry-run"
   },
