@@ -357,6 +357,41 @@ test("replays unchanged history and rescans only changed files", async () => {
   }
 });
 
+test("scans history when the changed file list exceeds the exec argument limit", async () => {
+  const fixture = makeFixture();
+  const deepDir = path.join(
+    fixture.codexDir,
+    "sessions",
+    "n".repeat(120),
+    "e".repeat(120),
+    "s".repeat(120),
+    "t".repeat(120),
+  );
+  fs.mkdirSync(deepDir, { recursive: true });
+  // Each path is ~700 bytes, so 2000 of them overflow the ~1MB macOS ARG_MAX.
+  for (let index = 0; index < 2000; index += 1) {
+    fs.writeFileSync(
+      path.join(deepDir, `${"d".repeat(180)}-${index}.jsonl`),
+      `${JSON.stringify({ timestamp: "2026-06-01T00:00:00Z", message: "no skill evidence" })}\n`,
+    );
+  }
+
+  const skills = collectSkills(fixture.skillsDir);
+  const stats = await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    skillsDirs: [fixture.skillsDir],
+    codexDir: fixture.codexDir,
+    stateDir: fixture.stateDir,
+    source: "codex",
+    cache: true,
+    now: NOW,
+  });
+
+  assert.equal(stats.codex.scannedFiles > 2000, true);
+  const stale = [...skills.values()].find((skill) => skill.skill === "stale-skill");
+  assert.equal(stale.usageEvents.length > 0, true);
+});
+
 test("rescans old history when a skill is newly installed", async () => {
   const fixture = makeFixture();
   fs.appendFileSync(

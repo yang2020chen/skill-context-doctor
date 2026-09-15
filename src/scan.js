@@ -959,17 +959,57 @@ async function readSelectedJsonLines(file, lineNumbers) {
   return rows;
 }
 
+// Incremental scans pass every changed file as its own argv entry, which blows past
+// the OS exec limit (E2BIG) on large histories. Batch roots well under the 1MB macOS
+// ARG_MAX so the rest of the command line and the environment still fit.
+const RG_ARGV_BUDGET = 128 * 1024;
+
+function chunkRoots(roots, maxBytes = RG_ARGV_BUDGET) {
+  const chunks = [];
+  let current = [];
+  let size = 0;
+  for (const root of roots) {
+    const cost = Buffer.byteLength(shellQuote(root)) + 1;
+    if (current.length > 0 && size + cost > maxBytes) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(root);
+    size += cost;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
 async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw = () => true) {
   if (roots.length === 0) return true;
   const pipelinePattern = pattern && typeof pattern === "object" && !Array.isArray(pattern);
   const usePipeline = pipelinePattern && jsonlRootsSize(roots) > 50 * 1024 * 1024;
+  for (const batch of chunkRoots(roots)) {
+    if (!(await scanRgBatch(batch, pattern, usePipeline, stats, onRecord, shouldProcessRaw))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function scanRgBatch(roots, pattern, usePipeline, stats, onRecord, shouldProcessRaw) {
+  const pipelinePattern = pattern && typeof pattern === "object" && !Array.isArray(pattern);
   const patternFile = Array.isArray(pattern)
     ? fixedPatternFile(pattern)
     : usePipeline
       ? fixedPatternFile(pattern.fixed)
       : "";
-  const child = usePipeline
-    ? spawn(
+  const cleanupPatternFile = () => {
+    if (!patternFile) return;
+    try {
+      fs.unlinkSync(patternFile);
+    } catch {
+    }
+  };
+  const [command, args] = usePipeline
+    ? [
         "sh",
         [
           "-c",
@@ -989,9 +1029,8 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
             shellQuote(patternFile),
           ].join(" "),
         ],
-        { stdio: ["ignore", "pipe", "ignore"] },
-      )
-    : spawn(
+      ]
+    : [
         "rg",
         [
           "-n",
@@ -1007,8 +1046,14 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
             : ["-e", pipelinePattern ? pattern.prefilter : pattern]),
           ...roots,
         ],
-        { stdio: ["ignore", "pipe", "ignore"] },
-      );
+      ];
+  let child;
+  try {
+    child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    cleanupPatternFile();
+    return false;
+  }
   const status = new Promise((resolve) => {
     child.once("error", () => resolve(null));
     child.once("close", (code) => resolve(code));
@@ -1039,12 +1084,7 @@ async function scanRgJsonLines(roots, pattern, stats, onRecord, shouldProcessRaw
   }
 
   const exitStatus = await status;
-  if (patternFile) {
-    try {
-      fs.unlinkSync(patternFile);
-    } catch {
-    }
-  }
+  cleanupPatternFile();
   if (![0, 1].includes(exitStatus)) return false;
 
   stats.matchedFiles += matchedFiles.size;
