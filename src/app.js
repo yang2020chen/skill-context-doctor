@@ -1,5 +1,6 @@
 import { INTERACTIVE_UNDO, parseArgs, printHelp } from "./args.js";
 import { buildAuditReport, formatAuditReport } from "./audit.js";
+import { buildRecommendations, formatRecommendationReport } from "./recommend.js";
 import { formatCleanupResult } from "./cleanup-result.js";
 import { shouldUseLinks } from "./format.js";
 import { buildRows, payloadFor } from "./model.js";
@@ -89,7 +90,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       scanStats = result.stats;
     } else {
       skills = collectSkills(options.skillsDirs);
-      scanStats = await scanEvidence(skills, { ...options, now });
+      const scanEvidenceOptions =
+        options.command === "recommend" ? { ...options, source: "all", now } : { ...options, now };
+      scanStats = await scanEvidence(skills, scanEvidenceOptions);
     }
   } finally {
     loading?.stop();
@@ -107,6 +110,21 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       write(stdout, formatAuditReport(auditReport, { ...options, now }));
     }
     return auditReport;
+  }
+
+  if (options.command === "recommend") {
+    const auditReport = buildAuditReport(skills, rows, { ...options, now });
+    const recReport = buildRecommendations(auditReport, {
+      ...options,
+      now,
+      displaySource: options.source !== "all" ? options.source : null,
+    });
+    if (options.json) {
+      write(stdout, `${JSON.stringify(recReport, null, 2)}\n`);
+    } else {
+      write(stdout, formatRecommendationReport(recReport, { ...options, now }));
+    }
+    return recReport;
   }
 
   if (options.csv) writeCsv(options.csv, rows);

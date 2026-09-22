@@ -47,7 +47,7 @@ export const DEFAULT_OPTIONS = {
 };
 
 export const INTERACTIVE_UNDO = "__interactive_undo__";
-const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit"]);
+const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit", "recommend"]);
 
 export function expandHome(value, home = os.homedir()) {
   if (!value) return value;
@@ -102,6 +102,7 @@ Usage: skill-context-doctor [command] [options]
 
 Commands:
   audit                          Generate unified health & context overhead report
+  recommend                      Generate actionable recommendations (KEEP/HIDE/REVIEW/REMOVE CANDIDATE)
   list                           Scan skills and print the normal report
   cleanup                        Scan skills, optionally with --apply
   omit <skill-or-pattern>         Add persistent omit patterns
@@ -304,6 +305,15 @@ export function parseArgs(argv) {
   }
   if (options.undo && (options.apply || options.commands || options.json || options.csv || options.snapshot)) {
     throw new Error("--undo cannot be combined with scan/output/apply options");
+  }
+  if (options.command === "recommend" && options.apply) {
+    throw new Error("recommend does not support --apply in v0.2 (recommendations are advisory)");
+  }
+  if (options.command === "audit" && options.apply) {
+    throw new Error("audit does not support --apply");
+  }
+  if (options.interactive && (options.command === "audit" || options.command === "recommend")) {
+    throw new Error(`--interactive cannot be combined with ${options.command}`);
   }
 
   const configuredSkillsDirs = [

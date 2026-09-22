@@ -86,7 +86,9 @@ export function detectEvidenceSources(options = {}) {
 export function buildAuditReport(skills, rows, options = {}) {
   const unusedDays = options.unusedDays ?? 45;
   const brokenList = detectBrokenSkills(options.skillsDirs || []);
+  const brokenNames = new Set(brokenList.map((b) => b.name));
   const detectedSources = detectEvidenceSources(options);
+  const skillFacts = [];
 
   // Group by unique skill name
   const skillsByName = new Map();
@@ -215,6 +217,57 @@ export function buildAuditReport(skills, rows, options = {}) {
       sourceStats.filesystem.usageEvents += filesystemEvents;
     }
 
+    const isBroken = brokenNames.has(skillName);
+    const isUsed = totalUsageEvents > 0;
+    const now = options.now || new Date();
+    const ageDays = lastUsedDate
+      ? Math.max(0, Math.floor((now.getTime() - lastUsedDate.getTime()) / 86_400_000))
+      : null;
+    const isStale = isUsed && ageDays !== null && ageDays > unusedDays;
+    const isRecent = isUsed && (ageDays === null || ageDays <= unusedDays);
+    const isNeverUsed = !isUsed;
+
+    const totalMentions = usages.reduce((acc, u) => acc + (u.mentions?.length || 0), 0);
+    const protectMentionDays = options.protectMentionDays ?? options.unusedDays ?? 45;
+    const recentMentions = usages.reduce(
+      (acc, u) =>
+        acc +
+        (u.mentions || []).filter(
+          (m) => m.ts && Math.floor((now.getTime() - m.ts.getTime()) / 86_400_000) <= protectMentionDays,
+        ).length,
+      0,
+    );
+
+    const agentSources = [];
+    if (piEvents > 0) agentSources.push("pi");
+    if (claudeEvents > 0) agentSources.push("claude");
+    if (codexEvents > 0) agentSources.push("codex");
+    if (opencodeEvents > 0) agentSources.push("opencode");
+    if (cursorEvents > 0) agentSources.push("cursor");
+    if (filesystemEvents > 0) agentSources.push("filesystem");
+
+    skillFacts.push({
+      skill: skillName,
+      isBroken,
+      isDotPrefixed,
+      isModelVisible,
+      visibleTokens: tokenCost,
+      usageCount: totalUsageEvents,
+      lastUsed: lastUsedDate,
+      usageAgeDays: ageDays,
+      isUsed,
+      isStale,
+      isRecent,
+      isNeverUsed,
+      mentionCount: totalMentions,
+      recentMentionCount: recentMentions,
+      hasRecentMention: recentMentions > 0,
+      installCount: usages.length,
+      isDuplicate: usages.length > 1,
+      agentUsageSources: agentSources,
+      isCrossAgent: agentSources.length > 1,
+    });
+
     // Top consumers: only model-visible skills
     if (isModelVisible) {
       visibleSkillsList.push({
@@ -222,6 +275,32 @@ export function buildAuditReport(skills, rows, options = {}) {
         visibleTokens: tokenCost,
         usageCount: totalUsageEvents,
         lastUsed: lastUsedDate ? lastUsedDate.toISOString().replace("T", " ").slice(0, 16) : "-",
+      });
+    }
+  }
+
+  for (const b of brokenList) {
+    if (!skillsByName.has(b.name)) {
+      skillFacts.push({
+        skill: b.name,
+        isBroken: true,
+        isDotPrefixed: b.name.startsWith("."),
+        isModelVisible: false,
+        visibleTokens: 0,
+        usageCount: 0,
+        lastUsed: null,
+        usageAgeDays: null,
+        isUsed: false,
+        isStale: false,
+        isRecent: false,
+        isNeverUsed: true,
+        mentionCount: 0,
+        recentMentionCount: 0,
+        hasRecentMention: false,
+        installCount: 1,
+        isDuplicate: false,
+        agentUsageSources: [],
+        isCrossAgent: false,
       });
     }
   }
@@ -256,6 +335,7 @@ export function buildAuditReport(skills, rows, options = {}) {
     topConsumers,
     brokenDetails: brokenList,
     evidenceSources: detectedSources,
+    skillFacts,
   };
 }
 

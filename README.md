@@ -99,9 +99,51 @@ faceless-explainer                           97          1   2026-07-20 09:57
 github-ops                                   82          0   -
 ```
 
+### Actionable Recommendations (`recommend`)
+
+`skill-context-doctor recommend` translates audit facts into explainable, deterministic recommendations with zero guesswork. Recommendations are advisory and non-destructive:
+
+```bash
+skill-context-doctor recommend
+```
+
+```text
+Skill Context Doctor
+
+Skill Context Doctor - Recommendations (v0.2.0)
+Analysis Scope: all evidence sources
+
+Summary
+  KEEP                  42  (Recently used or system skills)
+  HIDE                  18  (Model-visible but unused or stale)
+    ↳ Potential visible context savings: ~3.2K tokens (3,180 tokens)
+  REVIEW                12  (Broken, cross-agent, duplicate, or stale)
+  REMOVE CANDIDATE      35  (Already hidden from model and never used)
+
+Highest Impact HIDE Candidates (Reclaim Context Overhead)
+
+Skill                            Visible Tokens   Confidence   Reasons
+------------------------------   --------------   ----------   ----------------------------------------
+hyperframes-registry                        223   high         MODEL_VISIBLE, NEVER_USED, HIGH_CONTEXT_COST
+github-ops                                   82   high         MODEL_VISIBLE, NEVER_USED
+faceless-explainer                           97   medium       MODEL_VISIBLE, STALE_USAGE, CONTEXT_OVERHEAD
+
+Items Requiring Human Review
+
+Skill                            Primary Reason                Explanation
+------------------------------   ---------------------------   ----------------------------------------
+broken-tool                      BROKEN_INSTALLATION           Broken symlink or missing SKILL.md definition
+popular-cross-tool               CROSS_AGENT_SHARED            Shared across multiple agents (pi, claude)
+...
+```
+
 ### Common Commands
 
 ```bash
+# Actionable recommendations
+skill-context-doctor recommend
+skill-context-doctor recommend --json
+
 # Unified health & context overhead audit
 skill-context-doctor audit
 skill-context-doctor audit --json
@@ -132,21 +174,19 @@ skill-context-doctor undo latest
 
 ---
 
-## Status Classification (v0.1)
+## Recommendation Classification (v0.2)
 
-In v0.1, `skill-context-doctor` delivers objective facts without autonomous deletion decisions:
+`skill-context-doctor recommend` evaluates skills against a strict 11-step deterministic hierarchy:
 
-| Status | Meaning |
-| --- | --- |
-| `USED` | Verified execution evidence found in recent agent histories. |
-| `STALE` | Previously used, but no activity detected within the staleness window (default: 45 days). |
-| `NEVER USED` | Installed older than grace period (default: 7 days) with zero usage evidence. |
-| `MODEL VISIBLE` | Active skill whose description is actively exposed to the model context. |
-| `HIDDEN` | System/internal skill or disabled description not loaded into default prompt. |
-| `DUPLICATE` | Identical skill installed across multiple agent roots. |
-| `BROKEN` | Broken symlinks or missing `SKILL.md` entry points. |
+| Recommendation | Criteria | Rationale |
+| --- | --- | --- |
+| `KEEP` | Verified usage within stale window (≤45d) or system/internal (`.dot` prefix). | Protect active workflows and critical core agent functions. |
+| `HIDE` | Model-visible with zero usage, or stale (>45d) with significant token cost (≥50 tokens). | Reclaim input context tokens by disabling model invocation (`disable-model-invocation: true`). Leaves files untouched. |
+| `REVIEW` | Broken links, cross-agent shared tools, duplicate installs across roots, recent mentions without execution, or general stale tools. | Flags ambiguity for human review before any action. |
+| `REMOVE CANDIDATE` | Already hidden from model invocation AND zero usage evidence AND no recent mentions. | Safe candidate for file deletion or uninstallation (`cleanup --apply`). |
 
-*(Automated `KEEP / HIDE / REMOVE` recommendations will be introduced in v0.2).*
+> [!NOTE]
+> Recommendations are computed across global multi-agent evidence. When filtering with `--source pi`, decisions remain global to avoid falsely flagging cross-agent skills. Token savings strictly count `HIDE` candidates, as `REMOVE CANDIDATE` items are already hidden from model prompts.
 
 ---
 
@@ -175,7 +215,7 @@ In v0.1, `skill-context-doctor` delivers objective facts without autonomous dele
 ## Project Roadmap
 
 ```text
-v0.1 Audit (Current)
+v0.1 Audit (Completed)
   │  ├── Multi-agent discovery (Claude, Codex, Pi, OpenCode, Cursor)
   │  ├── Verified usage evidence vs mentions
   │  ├── Context token overhead measurement
@@ -183,10 +223,12 @@ v0.1 Audit (Current)
   │  └── Safe quarantine & undo
   │
   ▼
-v0.2 Recommend
-  │  ├── Fact-based recommendations: KEEP / HIDE / REMOVE
-  │  ├── Health score & risk evaluation
-  │  └── Interactive rule generation
+v0.2 Recommend (Current)
+  │  ├── Deterministic recommendations: KEEP / HIDE / REVIEW / REMOVE CANDIDATE
+  │  ├── 11-step rule hierarchy built directly on audit facts
+  │  ├── Context token savings estimation for HIDE candidates
+  │  ├── Cross-agent safe scoping
+  │  └── Structured JSON report (`recommend --json`)
   │
   ▼
 v0.3 Optimize
