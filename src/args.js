@@ -54,7 +54,7 @@ export const DEFAULT_OPTIONS = {
 };
 
 export const INTERACTIVE_UNDO = "__interactive_undo__";
-const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit", "recommend", "optimize", "map"]);
+const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit", "recommend", "optimize"]);
 
 export function expandHome(value, home = os.homedir()) {
   if (!value) return value;
@@ -111,7 +111,6 @@ Commands:
   audit                          Generate unified health & context overhead report
   recommend                      Generate actionable recommendations (KEEP/HIDE/REVIEW/REMOVE CANDIDATE)
   optimize                       Safely execute recommendations (HIDE unused/stale skills)
-  map [SKILL]                    Inspect cross-agent skill topology and ownership
   list                           Scan skills and print the normal report
   cleanup                        Scan skills, optionally with --apply
   omit <skill-or-pattern>         Add persistent omit patterns
@@ -183,7 +182,7 @@ export function parseArgs(argv) {
     if (!arg.startsWith("-")) {
       if (!options.command && COMMANDS.has(arg)) {
         options.command = arg;
-      } else if (options.command === "omit" || options.command === "undo" || options.command === "map") {
+      } else if (options.command === "omit" || options.command === "undo") {
         options.commandArgs.push(arg);
       } else {
         throw new Error(`Unknown command or option: ${arg}`);
