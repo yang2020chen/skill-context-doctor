@@ -3,6 +3,7 @@ import path from "node:path";
 import { expandHome } from "./args.js";
 import { formatNumber } from "./format.js";
 import { renderLogo } from "./logo.js";
+import { getVercelLockPaths } from "./vercel-lock.js";
 
 function formatTokens(count) {
   const number = Number(count) || 0;
@@ -13,9 +14,47 @@ function formatTokens(count) {
   return `${number}`;
 }
 
-export function detectBrokenSkills(skillsDirs) {
+export function detectBrokenSkills(skillsDirs, options = {}) {
   const broken = [];
-  for (const rawDir of skillsDirs || []) {
+  const dirs = skillsDirs || options.skillsDirs || [];
+  const registeredSkillNames = new Set();
+
+  if (options.registeredSkills) {
+    for (const item of options.registeredSkills) {
+      registeredSkillNames.add(typeof item === "string" ? item : item.name || item.skill);
+    }
+  }
+
+  const lockPaths = options.lockPaths
+    ? (Array.isArray(options.lockPaths) ? options.lockPaths : [options.lockPaths])
+    : options.noGlobalLock
+      ? []
+      : getVercelLockPaths({ skillsDirs: dirs, ...options });
+
+  const lockEntries = [];
+  for (const lockPath of lockPaths) {
+    if (!lockPath || !fs.existsSync(lockPath)) continue;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+      if (parsed && typeof parsed.skills === "object" && parsed.skills !== null) {
+        for (const [name, entry] of Object.entries(parsed.skills)) {
+          registeredSkillNames.add(name);
+          const resolvedLock = path.resolve(lockPath);
+          let targetSkillsDir = "";
+          if (path.basename(resolvedLock) === ".skill-lock.json") {
+            targetSkillsDir = path.join(path.dirname(resolvedLock), "skills");
+          } else if (path.basename(resolvedLock) === "skills-lock.json") {
+            targetSkillsDir = path.join(path.dirname(resolvedLock), ".agents", "skills");
+          }
+          lockEntries.push({ name, entry, targetSkillsDir });
+        }
+      }
+    } catch {}
+  }
+
+  const seenPaths = new Set();
+
+  for (const rawDir of dirs) {
     const dir = expandHome(rawDir);
     if (!fs.existsSync(dir)) continue;
     try {
@@ -24,8 +63,11 @@ export function detectBrokenSkills(skillsDirs) {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
         const entryPath = path.join(dir, entry.name);
         const skillFile = path.join(entryPath, "SKILL.md");
+
         try {
           const lstat = fs.lstatSync(entryPath);
+
+          // ① Dangling symlink: skill-link -> nonexistent target
           if (lstat.isSymbolicLink()) {
             if (!fs.existsSync(entryPath)) {
               broken.push({
@@ -33,26 +75,60 @@ export function detectBrokenSkills(skillsDirs) {
                 path: entryPath,
                 reason: "broken symlink target",
               });
+              seenPaths.add(path.resolve(entryPath));
               continue;
             }
           }
+
+          // ② Registered skill missing SKILL.md
           if (!fs.existsSync(skillFile)) {
+            if (registeredSkillNames.has(entry.name)) {
+              broken.push({
+                name: entry.name,
+                path: entryPath,
+                reason: "missing SKILL.md",
+              });
+              seenPaths.add(path.resolve(entryPath));
+            }
+            // Regular directories without SKILL.md are ignored
+            continue;
+          }
+        } catch (error) {
+          if (registeredSkillNames.has(entry.name) || entry.isSymbolicLink()) {
             broken.push({
               name: entry.name,
               path: entryPath,
-              reason: "missing SKILL.md",
+              reason: error?.message || String(error),
             });
+            seenPaths.add(path.resolve(entryPath));
           }
-        } catch (error) {
-          broken.push({
-            name: entry.name,
-            path: entryPath,
-            reason: error?.message || String(error),
-          });
         }
       }
     } catch {}
   }
+
+  // Check if lockfile-registered skills are missing their directory completely
+  for (const { name, targetSkillsDir } of lockEntries) {
+    if (!targetSkillsDir) continue;
+    const matchingDir = dirs.find(
+      (d) => path.resolve(expandHome(d)) === path.resolve(targetSkillsDir),
+    );
+    if (matchingDir) {
+      const expectedDir = path.join(targetSkillsDir, name);
+      if (!seenPaths.has(path.resolve(expectedDir))) {
+        const expectedSkillMd = path.join(expectedDir, "SKILL.md");
+        if (!fs.existsSync(expectedSkillMd)) {
+          broken.push({
+            name,
+            path: expectedDir,
+            reason: fs.existsSync(expectedDir) ? "missing SKILL.md" : "missing skill directory",
+          });
+          seenPaths.add(path.resolve(expectedDir));
+        }
+      }
+    }
+  }
+
   return broken;
 }
 
@@ -85,7 +161,7 @@ export function detectEvidenceSources(options = {}) {
 
 export function buildAuditReport(skills, rows, options = {}) {
   const unusedDays = options.unusedDays ?? 45;
-  const brokenList = detectBrokenSkills(options.skillsDirs || []);
+  const brokenList = detectBrokenSkills(options.skillsDirs || [], options);
   const brokenNames = new Set(brokenList.map((b) => b.name));
   const detectedSources = detectEvidenceSources(options);
   const skillFacts = [];

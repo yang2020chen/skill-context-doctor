@@ -178,26 +178,39 @@ test("audit honors dot-prefixed internal skills as not model-visible", () => {
   assert.equal(report.topConsumers.length, 0);
 });
 
-test("audit detects broken symlinks and missing SKILL.md", () => {
+test("audit detects broken dangling symlink as BROKEN", () => {
   const fixture = makeAuditFixture();
-
-  // Valid skill
-  fixture.addSkill(fixture.skillsDirA, "valid-skill");
-
-  // Missing SKILL.md (empty directory)
-  const emptyDir = path.join(fixture.skillsDirA, "empty-skill");
-  fs.mkdirSync(emptyDir, { recursive: true });
-
-  // Broken symlink pointing to nonexistent path
   const brokenLink = path.join(fixture.skillsDirA, "broken-symlink");
   fs.symlinkSync(path.join(fixture.root, "nonexistent-target"), brokenLink);
 
-  const broken = detectBrokenSkills([fixture.skillsDirA]);
+  const broken = detectBrokenSkills([fixture.skillsDirA], { lockPaths: [] });
+  assert.equal(broken.length, 1);
+  assert.equal(broken[0].name, "broken-symlink");
+  assert.equal(broken[0].reason, "broken symlink target");
+});
 
-  assert.equal(broken.length, 2);
-  const reasons = broken.map((b) => b.reason);
-  assert.equal(reasons.includes("missing SKILL.md"), true);
-  assert.equal(reasons.includes("broken symlink target"), true);
+test("audit detects registered skill missing SKILL.md as BROKEN", () => {
+  const fixture = makeAuditFixture();
+  const emptyRegisteredDir = path.join(fixture.skillsDirA, "registered-skill");
+  fs.mkdirSync(emptyRegisteredDir, { recursive: true });
+
+  const broken = detectBrokenSkills([fixture.skillsDirA], {
+    registeredSkills: ["registered-skill"],
+    lockPaths: [],
+  });
+  assert.equal(broken.length, 1);
+  assert.equal(broken[0].name, "registered-skill");
+  assert.equal(broken[0].reason, "missing SKILL.md");
+});
+
+test("audit ignores regular directory dist/ without SKILL.md (not broken)", () => {
+  const fixture = makeAuditFixture();
+  const normalDir = path.join(fixture.skillsDirA, "dist");
+  fs.mkdirSync(normalDir, { recursive: true });
+  fs.writeFileSync(path.join(normalDir, "bundle.js"), "// artifact");
+
+  const broken = detectBrokenSkills([fixture.skillsDirA], { lockPaths: [] });
+  assert.equal(broken.length, 0);
 });
 
 test("audit breaks down sources into usedSkills and usageEvents", () => {
