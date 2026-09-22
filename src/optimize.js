@@ -195,9 +195,18 @@ export function planOptimization(auditReport, recReport, skills, options = {}) {
   const skipped = [];
   const protectedByKeep = [];
 
+  const onlyNames = new Set(
+    (options.only || options.onlyPatterns || []).map((s) => String(s).trim()).filter(Boolean),
+  );
+
   for (const [realPath, entry] of canonicalMap.entries()) {
     const identities = [...entry.identities];
     const primarySkill = identities[0];
+
+    // Check if filtered by --only
+    if (onlyNames.size > 0 && !identities.some((name) => onlyNames.has(name))) {
+      continue;
+    }
 
     // Check if any identity is in keep whitelist
     const keepMatched = identities.find((name) => isKeepProtected(name, keepNames));
@@ -312,13 +321,11 @@ export function planOptimization(auditReport, recReport, skills, options = {}) {
     const sha256Before = sha256Buffer(rawBuffer);
     const sha256After = sha256Buffer(patchResult.buffer);
 
-    planned.push({
+    const plannedItem = {
       skill: primarySkill,
       identities,
       canonicalFilePath: realPath,
       observedPaths: entry.usages.map((u) => u.path),
-      rawBuffer,
-      newBuffer: patchResult.buffer,
       sha256Before,
       sha256After,
       modeBefore: stat.mode,
@@ -326,10 +333,23 @@ export function planOptimization(auditReport, recReport, skills, options = {}) {
       estimatedTokenSavings: primaryRec.visibleTokens || 0,
       reasonCodes: primaryRec.reasons || ["MODEL_VISIBLE", "NEVER_USED"],
       confidence: primaryRec.confidence || "high",
-    });
+    };
+    Object.defineProperty(plannedItem, "rawBuffer", { value: rawBuffer, enumerable: false, writable: true });
+    Object.defineProperty(plannedItem, "newBuffer", { value: patchResult.buffer, enumerable: false, writable: true });
+    Object.defineProperty(plannedItem, "_rawBuffer", { value: rawBuffer, enumerable: false, writable: true });
+    Object.defineProperty(plannedItem, "_newBuffer", { value: patchResult.buffer, enumerable: false, writable: true });
+    planned.push(plannedItem);
   }
 
-  const totalSavings = planned.reduce((acc, item) => acc + item.estimatedTokenSavings, 0);
+  // If --limit N is explicitly passed, take top N items by highest token savings
+  let finalPlanned = planned;
+  if (options.limitExplicit && options.limit > 0 && planned.length > options.limit) {
+    finalPlanned = [...planned]
+      .sort((a, b) => b.estimatedTokenSavings - a.estimatedTokenSavings)
+      .slice(0, options.limit);
+  }
+
+  const totalSavings = finalPlanned.reduce((acc, item) => acc + item.estimatedTokenSavings, 0);
   const removalCandidates = (recReport?.recommendations || []).filter(
     (r) => r.action === "REMOVE CANDIDATE",
   );
@@ -338,13 +358,13 @@ export function planOptimization(auditReport, recReport, skills, options = {}) {
     command: "optimize",
     mode: "dry-run",
     summary: {
-      plannedCount: planned.length,
+      plannedCount: finalPlanned.length,
       skippedCount: skipped.length,
       protectedByKeepCount: protectedByKeep.length,
       removalCandidateCount: removalCandidates.length,
       estimatedTokenSavings: totalSavings,
     },
-    planned,
+    planned: finalPlanned,
     skipped,
     protectedByKeep,
     removalCandidates,

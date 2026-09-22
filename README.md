@@ -149,7 +149,15 @@ popular-cross-tool               CROSS_AGENT_SHARED            Shared across mul
 # Preview planned context optimization (dry-run)
 skill-context-doctor optimize
 
-# Execute context optimization
+# Trial run: optimize only specific skill(s)
+skill-context-doctor optimize --only xlsx
+skill-context-doctor optimize --apply --only xlsx
+
+# Batch trial run: optimize top N highest impact skills
+skill-context-doctor optimize --limit 3
+skill-context-doctor optimize --apply --limit 3
+
+# Execute full context optimization across all eligible skills
 skill-context-doctor optimize --apply
 
 # Protect specific skills from being hidden

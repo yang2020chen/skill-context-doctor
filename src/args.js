@@ -42,6 +42,8 @@ export const DEFAULT_OPTIONS = {
   keepPatterns: [],
   keepFile: "~/.config/skill-context-doctor/keep",
   noKeepFile: false,
+  onlyPatterns: [],
+  limitExplicit: false,
   commands: false,
   interactive: false,
   noInteractive: false,
@@ -143,6 +145,7 @@ Options:
   --keep SKILL                    Protect specific skill name from optimization (repeatable)
   --keep-file PATH                Keep file (default: ~/.config/skill-context-doctor/keep)
   --no-keep-file                  Ignore the default keep file
+  --only SKILL                    Target only specific skill name in optimize (repeatable)
   --interactive                   Force interactive terminal review
   --no-interactive                Print the static table instead of terminal review
   --apply                         Move cleanup candidates to quarantine
@@ -166,6 +169,8 @@ export function parseArgs(argv) {
     skillsDirs: [...DEFAULT_OPTIONS.skillsDirs],
     evidenceDirs: [...DEFAULT_OPTIONS.evidenceDirs],
     omitPatterns: [...DEFAULT_OPTIONS.omitPatterns],
+    keepPatterns: [...DEFAULT_OPTIONS.keepPatterns],
+    onlyPatterns: [...DEFAULT_OPTIONS.onlyPatterns],
   };
   let customSkillsDirs = false;
 
@@ -225,6 +230,7 @@ export function parseArgs(argv) {
       i += 1;
     } else if (arg === "--limit") {
       options.limit = readNumber(argv, i, arg);
+      options.limitExplicit = true;
       i += 1;
     } else if (arg === "--csv") {
       options.csv = readNext(argv, i, arg);
@@ -251,6 +257,9 @@ export function parseArgs(argv) {
       i += 1;
     } else if (arg === "--no-keep-file") {
       options.noKeepFile = true;
+    } else if (arg === "--only") {
+      options.onlyPatterns.push(readNext(argv, i, arg));
+      i += 1;
     } else if (arg === "--commands") {
       options.commands = true;
     } else if (arg === "--interactive") {
@@ -394,6 +403,19 @@ export function parseArgs(argv) {
         .map((item) => item.trim())
         .filter(Boolean),
     ),
+    onlyPatterns: options.onlyPatterns.flatMap((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+    only: options.onlyPatterns.flatMap((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+    limitExplicit: Boolean(options.limitExplicit),
     undo:
       options.undo &&
       options.undo !== INTERACTIVE_UNDO &&

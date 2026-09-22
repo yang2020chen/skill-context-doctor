@@ -650,3 +650,34 @@ test("CLI optimize --source pi uses global evidence scope", async () => {
   assert.equal(plan.analysisScope, "all");
   assert.equal(plan.displaySource, "pi");
 });
+
+test("CLI optimize --only targets exclusively the specified skill", async () => {
+  const fixture = makeOptimizeFixture();
+  fixture.addSkill("skill-alpha", { frontmatter: { description: "Alpha" } });
+  fixture.addSkill("skill-beta", { frontmatter: { description: "Beta" } });
+
+  let stdout = "";
+  const plan = await main(fixture.cliArgs(["optimize", "--only", "skill-alpha", "--json"]), {
+    stdout: { write: (chunk) => (stdout += chunk) },
+    now: new Date("2026-09-22T12:00:00.000Z"),
+  });
+
+  assert.equal(plan.summary.plannedCount, 1);
+  assert.equal(plan.planned[0].skill, "skill-alpha");
+});
+
+test("CLI optimize --limit limits planned targets to specified count", async () => {
+  const fixture = makeOptimizeFixture();
+  fixture.addSkill("skill-one", { frontmatter: { description: "One" } });
+  fixture.addSkill("skill-two", { frontmatter: { description: "Two" } });
+  fixture.addSkill("skill-three", { frontmatter: { description: "Three" } });
+
+  let stdout = "";
+  const plan = await main(fixture.cliArgs(["optimize", "--limit", "2", "--json"]), {
+    stdout: { write: (chunk) => (stdout += chunk) },
+    now: new Date("2026-09-22T12:00:00.000Z"),
+  });
+
+  assert.equal(plan.summary.plannedCount, 2);
+  assert.equal(plan.planned.length, 2);
+});
