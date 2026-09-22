@@ -8,6 +8,7 @@ export const DEFAULT_SKILLS_DIRS = [
   "~/.claude/skills",
   "~/.codex/skills",
   "~/.cursor/skills",
+  "~/.pi/agent/skills",
 ];
 
 export const DEFAULT_OPTIONS = {
@@ -20,6 +21,7 @@ export const DEFAULT_OPTIONS = {
   claudeAppDir: "~/Library/Application Support/Claude",
   opencodeDir: "~/.local/share/opencode",
   cursorDir: "~/.cursor/chats",
+  piDir: "~/.pi/agent",
   evidenceDirs: [],
   source: "all",
   unusedDays: 45,
@@ -107,13 +109,14 @@ Commands:
 Options:
   --path PATH                     Skills directory to scan; repeatable
   --skills-dir PATH               Alias for --path
-  --source codex|claude|opencode|cursor|filesystem|all
+  --source codex|claude|opencode|cursor|filesystem|pi|all
                                   Evidence source to scan (default: all)
   --codex-dir PATH                Codex state directory (default: ~/.codex)
   --claude-dir PATH               Claude state directory (default: ~/.claude)
   --claude-app-dir PATH           Claude desktop state directory
   --opencode-dir PATH             OpenCode state directory (default: ~/.local/share/opencode)
   --cursor-dir PATH               Cursor chats directory, or ~/.cursor root (default: ~/.cursor/chats)
+  --pi-dir PATH                   PI agent directory (default: ~/.pi/agent)
   --evidence-dir PATH             Extra local transcript/log directory to scan for mentions
   --unused-days N                 Mark skills stale after last use (default: 45)
   --unused-installed-days N       Propose never-used skills older than N days (default: 7)
@@ -139,7 +142,7 @@ Options:
   --no-cache                      Bypass incremental scan evidence for this run
   -h, --help                      Show help
 
-Default skill roots are ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, and ~/.cursor/skills.
+Default skill roots are ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, and ~/.pi/agent/skills.
 Default behavior is interactive when stdin/stdout are terminals, otherwise static dry-run.
 --apply writes an undo manifest; restore interactively with --undo or directly with --undo latest.
 Direct forms are also available: skillkill list --json, skillkill cleanup --apply,
@@ -192,6 +195,9 @@ export function parseArgs(argv) {
       i += 1;
     } else if (arg === "--cursor-dir") {
       options.cursorDir = readNext(argv, i, arg);
+      i += 1;
+    } else if (arg === "--pi-dir") {
+      options.piDir = readNext(argv, i, arg);
       i += 1;
     } else if (arg === "--evidence-dir") {
       options.evidenceDirs.push(readNext(argv, i, arg));
@@ -278,8 +284,8 @@ export function parseArgs(argv) {
     throw new Error("skillkill list cannot be combined with --apply");
   }
 
-  if (!["codex", "claude", "opencode", "cursor", "filesystem", "all"].includes(options.source)) {
-    throw new Error("--source must be codex, claude, opencode, cursor, filesystem, or all");
+  if (!["codex", "claude", "opencode", "cursor", "filesystem", "pi", "all"].includes(options.source)) {
+    throw new Error("--source must be codex, claude, opencode, cursor, filesystem, pi, or all");
   }
   if (options.apply && options.json) {
     throw new Error("--apply cannot be combined with --json");
@@ -330,6 +336,7 @@ export function parseArgs(argv) {
     claudeAppDir: path.resolve(expandHome(options.claudeAppDir)),
     opencodeDir: path.resolve(expandHome(options.opencodeDir)),
     cursorDir: path.resolve(expandHome(options.cursorDir)),
+    piDir: path.resolve(expandHome(options.piDir)),
     evidenceDirs: options.evidenceDirs.flatMap((value) =>
       value
         .split(",")

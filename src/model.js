@@ -228,6 +228,9 @@ export function buildRows(skills, options) {
       const filesystemUsageCount = usage.usageEvents.filter((item) =>
         item.kind.startsWith("filesystem_"),
       ).length;
+      const piUsageCount = usage.usageEvents.filter((item) =>
+        item.kind.startsWith("pi_"),
+      ).length;
       const opencodeMentionCount = usage.mentions.filter((item) =>
         item.kind.startsWith("opencode_"),
       ).length;
@@ -314,6 +317,7 @@ export function buildRows(skills, options) {
         opencode_usage_count: opencodeUsageCount,
         cursor_usage_count: cursorUsageCount,
         filesystem_usage_count: filesystemUsageCount,
+        pi_usage_count: piUsageCount,
         same_name_usage_count:
           (usageEventCountBySkill.get(usage.skill) || 0) - usage.usageEvents.length,
         recent_usage_count: recentUsageEvents.length,
@@ -334,6 +338,7 @@ export function buildRows(skills, options) {
         opencode_strong_count: opencodeUsageCount,
         cursor_strong_count: cursorUsageCount,
         filesystem_strong_count: filesystemUsageCount,
+        pi_strong_count: piUsageCount,
         last_strong_read: formatDate(lastDirectUse),
         last_direct_verified_use: formatDate(lastDirectUse),
         last_verified_use: formatDate(lastUsed),
@@ -463,6 +468,8 @@ export function payloadFor(rows, options, scanStats, now = new Date()) {
       opencodeStrong: rows.reduce((sum, row) => sum + row.opencode_strong_count, 0),
       cursorStrong: rows.reduce((sum, row) => sum + row.cursor_strong_count, 0),
       filesystemStrong: rows.reduce((sum, row) => sum + row.filesystem_strong_count, 0),
+      piUsage: rows.reduce((sum, row) => sum + row.pi_usage_count, 0),
+      piStrong: rows.reduce((sum, row) => sum + row.pi_strong_count, 0),
       opencodeWeak: rows.reduce((sum, row) => sum + row.opencode_weak_count, 0),
       cursorWeak: rows.reduce((sum, row) => sum + row.cursor_weak_count, 0),
       filesystemWeak: rows.reduce((sum, row) => sum + row.filesystem_weak_count, 0),

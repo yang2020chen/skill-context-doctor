@@ -42,7 +42,7 @@ disable color.
 for evidence that each skill was actually used.
 
 - Default skill roots: `~/.agents/skills`, `~/.claude/skills`,
-  `~/.codex/skills`, and `~/.cursor/skills`
+  `~/.codex/skills`, `~/.cursor/skills`, and `~/.pi/agent/skills`
 - Usage: native skill-invocation records and structured skill actions from supported tools
 - Mention: raw `SKILL.md` path/name mentions in supported local stores
 - Cleanup candidates: stale usage or never-used skills past the age
@@ -98,6 +98,7 @@ skillkill --path ~/.agents/skills
 skillkill --path ~/.agents/skills --path ~/.claude/skills
 skillkill --source opencode
 skillkill --source cursor
+skillkill --source pi
 skillkill --evidence-dir ~/.continue
 
 # Keep known-good skills out of cleanup candidates
@@ -162,7 +163,8 @@ Interactive omit appends the skill name to `~/.config/skillkill/omit` unless
 | Option | Purpose |
 | --- | --- |
 | `--path PATH`, `--skills-dir PATH` | Skills directory to scan; repeatable |
-| `--source codex|claude|opencode|cursor|filesystem|all` | Evidence source to scan |
+| `--source codex|claude|opencode|cursor|pi|filesystem|all` | Evidence source to scan |
+| `--pi-dir PATH` | Pi agent directory to scan (default: `~/.pi/agent`) |
 | `--evidence-dir PATH` | Extra transcript or log directory for mentions |
 | `--unused-days N` | Mark skills stale after last use |
 | `--unused-installed-days N` | Propose never-used skills after install age |
@@ -195,6 +197,7 @@ use `--no-cache` for a fresh diagnostic scan without replacing the saved cache.
 | Claude / Claude Code | `~/.claude/history.jsonl`, `~/.claude/projects`, `~/.claude/tasks`, `~/.claude/sessions`, `~/Library/Application Support/Claude/claude-code-sessions`, `~/Library/Application Support/Claude/local-agent-mode-sessions`, `~/.claude.json` | `attributionSkill` records; native `Skill` tool calls; invoked-skill attachments; slash-command skill tags; autocomplete `skillUsage.lastUsedAt`; structured read tool calls or shell commands that read `SKILL.md`; commands that execute files under a skill `scripts/` directory | Raw `.claude/skills/.../SKILL.md` or `.agents/skills/.../SKILL.md` path references |
 | OpenCode | `~/.local/share/opencode/storage/message`, `storage/part`, `storage/session/message`, `storage/session/part` | Structured `read` tool parts whose input targets an installed `SKILL.md` | Raw `SKILL.md` path references in message or part JSON |
 | Cursor | `~/.cursor/projects/**/agent-transcripts/*.jsonl`, `~/.cursor/chats/**/store.db` | Structured read tool calls in agent transcripts whose input targets an installed `SKILL.md` | Raw `SKILL.md` path references found in agent transcripts or chat DB blobs |
+| Pi | `~/.pi/agent/sessions` | Explicit `/skill:name` invocations; structured `read` tool calls and shell commands reading installed `SKILL.md` files | Raw installed `SKILL.md` path references |
 | Extra filesystem roots | Paths passed with `--evidence-dir` | Structured read tool records or shell commands that read `SKILL.md` | Raw `SKILL.md` path references |
 
 Usage drives `last_used`; `last_verified_use` remains as a compatibility alias.

@@ -76,15 +76,19 @@ function makeFixture() {
   const claudeSkillsDir = path.join(root, ".claude", "skills");
   const codexSkillsDir = path.join(root, ".codex", "skills");
   const cursorSkillsDir = path.join(root, ".cursor", "skills");
+  const piSkillsDir = path.join(root, ".pi", "agent", "skills");
+  const agentsSkillsDir = path.join(root, ".agents", "skills");
   const codexDir = path.join(root, "codex");
   const claudeDir = path.join(root, "claude");
   const claudeAppDir = path.join(root, "claude-app");
   const opencodeDir = path.join(root, "opencode");
   const cursorDir = path.join(root, "cursor");
+  const piDir = path.join(root, "pi-agent");
   const evidenceDir = path.join(root, "evidence");
   const stateDir = path.join(root, "state");
   fs.mkdirSync(path.join(codexDir, "sessions"), { recursive: true });
   fs.mkdirSync(path.join(claudeDir, "projects"), { recursive: true });
+  fs.mkdirSync(path.join(piDir, "sessions"), { recursive: true });
 
   const skillPathIn = (skillsRoot, name) => path.join(skillsRoot, name, "SKILL.md");
   const skillPath = (name) => skillPathIn(skillsDir, name);
@@ -137,11 +141,14 @@ function makeFixture() {
     claudeSkillsDir,
     codexSkillsDir,
     cursorSkillsDir,
+    piSkillsDir,
+    agentsSkillsDir,
     codexDir,
     claudeDir,
     claudeAppDir,
     opencodeDir,
     cursorDir,
+    piDir,
     evidenceDir,
     stateDir,
     skillPath,
@@ -1251,6 +1258,8 @@ test("whitelist alias removes skills from json and commands output", async () =>
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--whitelist",
@@ -1287,6 +1296,8 @@ test("whitelist alias removes skills from json and commands output", async () =>
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--omit",
@@ -1342,6 +1353,8 @@ test("direct list json includes risk and token cost without status", async () =>
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--json",
@@ -1399,6 +1412,8 @@ test("direct cleanup apply and undo latest commands work", async () => {
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1741,6 +1756,8 @@ test("interactive e2e selects with enter and quarantines confirmed rows", async 
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1792,6 +1809,8 @@ test("interactive e2e permanently deletes only after typed confirmation", async 
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1844,6 +1863,8 @@ test("interactive e2e filters with slash search before cleanup", async () => {
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1894,6 +1915,8 @@ test("interactive e2e applies sort hotkeys", async () => {
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1934,6 +1957,8 @@ test("interactive e2e omits current row and persists omit pattern", async () => 
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -1974,6 +1999,8 @@ test("apply quarantines candidates and undo restores them", async () => {
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -2047,6 +2074,8 @@ test("apply quarantines symlinked skills without moving the symlink target", asy
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -2119,6 +2148,8 @@ test("apply removes Vercel skills lock entries and undo restores them", async ()
         fixture.opencodeDir,
         "--cursor-dir",
         fixture.cursorDir,
+        "--pi-dir",
+        fixture.piDir,
         "--unused-installed-days",
         "0",
         "--state-dir",
@@ -2190,6 +2221,8 @@ test("interactive undo restores a selected cleanup run", async () => {
       fixture.opencodeDir,
       "--cursor-dir",
       fixture.cursorDir,
+      "--pi-dir",
+      fixture.piDir,
       "--unused-installed-days",
       "0",
       "--state-dir",
@@ -2271,4 +2304,266 @@ test("bare undo requires a tty", async () => {
       }),
     /Interactive undo requires a TTY/,
   );
+});
+
+test("tracks PI agent evidence signals from session transcripts", async () => {
+  const fixture = makeFixture();
+  const sessionDir = path.join(fixture.piDir, "sessions", "fixture-workspace");
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  fixture.writeSkill("pi-command-skill");
+  fixture.writeSkill("pi-tool-read");
+  fixture.writeSkill("pi-bash-read");
+  fixture.writeSkill("pi-mention-only");
+  fixture.writeSkill("pi-assistant-mention");
+  fixture.writeSkillAt(fixture.piSkillsDir, "pi-dotskill");
+  fixture.writeSkillAt(fixture.agentsSkillsDir, "pi-agents-skill");
+
+  fs.writeFileSync(
+    path.join(sessionDir, "session-1.jsonl"),
+    [
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:00:00Z",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "Please help me with /skill:pi-command-skill now" },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:01:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "You can also run /skill:pi-assistant-mention to do that" },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:02:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call_1",
+              name: "read",
+              arguments: { path: fixture.skillPath("pi-tool-read") },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:03:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call_2",
+              name: "bash",
+              arguments: {
+                command: `head -n 20 ${fixture.skillPath("pi-bash-read")}`,
+              },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:04:00Z",
+        message: {
+          role: "user",
+          content: `Path reference: ${fixture.skillPath("pi-mention-only")}`,
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:05:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call_3",
+              name: "read",
+              arguments: { path: fixture.skillPathIn(fixture.piSkillsDir, "pi-dotskill") },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:06:00Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call_4",
+              name: "read",
+              arguments: { path: fixture.skillPathIn(fixture.agentsSkillsDir, "pi-agents-skill") },
+            },
+          ],
+        },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  const skills = collectSkills([fixture.skillsDir, fixture.piSkillsDir, fixture.agentsSkillsDir]);
+  const stats = await scanEvidence(skills, {
+    skillsDir: fixture.skillsDir,
+    piDir: fixture.piDir,
+    source: "pi",
+    fullScan: false,
+    now: NOW,
+  });
+
+  const rows = buildRows(skills, {
+    unusedDays: 45,
+    unusedInstalledDays: 0,
+    now: NOW,
+  });
+  const byName = new Map(rows.map((r) => [r.skill, r]));
+
+  // 1. /skill:pi-command-skill in user message -> usage count 1
+  assert.equal(byName.get("pi-command-skill").pi_usage_count, 1);
+  assert.equal(byName.get("pi-command-skill").last_verified_use, "2026-06-10 10:00:00");
+
+  // 2. tool read -> usage count 1
+  assert.equal(byName.get("pi-tool-read").pi_usage_count, 1);
+  assert.equal(byName.get("pi-tool-read").last_verified_use, "2026-06-10 10:02:00");
+
+  // 3. bash read -> usage count 1
+  assert.equal(byName.get("pi-bash-read").pi_usage_count, 1);
+  assert.equal(byName.get("pi-bash-read").last_verified_use, "2026-06-10 10:03:00");
+
+  // 4. mention only -> usage count 0, mention count 1
+  assert.equal(byName.get("pi-mention-only").pi_usage_count, 0);
+  assert.equal(byName.get("pi-mention-only").mention_count, 1);
+
+  // 5. assistant text /skill:pi-assistant-mention -> MUST NOT be usage
+  assert.equal(byName.get("pi-assistant-mention").pi_usage_count, 0);
+
+  // 6. .pi/agent/skills/pi-dotskill toolCall read recognized and counted
+  assert.equal(byName.get("pi-dotskill").pi_usage_count, 1);
+  assert.equal(byName.get("pi-dotskill").last_verified_use, "2026-06-10 10:05:00");
+
+  // 7. .agents/skills/pi-agents-skill toolCall read recognized and counted
+  assert.equal(byName.get("pi-agents-skill").pi_usage_count, 1);
+  assert.equal(byName.get("pi-agents-skill").last_verified_use, "2026-06-10 10:06:00");
+
+  // 8. recentNewChats counts 1 session JSONL file (within 30d of NOW)
+  assert.equal(stats.pi.recentNewChats, 1);
+});
+
+test("fast scan and full-scan produce identical evidence for PI /skill: commands", async () => {
+  const fixture = makeFixture();
+  const sessionDir = path.join(fixture.piDir, "sessions", "fast-vs-full");
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  fixture.writeSkill("fast-full-skill");
+
+  fs.writeFileSync(
+    path.join(sessionDir, "session.jsonl"),
+    JSON.stringify({
+      type: "message",
+      timestamp: "2026-06-10T12:00:00Z",
+      message: {
+        role: "user",
+        content: "/skill:fast-full-skill",
+      },
+    }) + "\n",
+  );
+
+  const fastSkills = collectSkills(fixture.skillsDir);
+  await scanEvidence(fastSkills, {
+    skillsDir: fixture.skillsDir,
+    piDir: fixture.piDir,
+    source: "pi",
+    fullScan: false,
+  });
+  const fastRow = buildRows(fastSkills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((r) => r.skill === "fast-full-skill");
+
+  const fullSkills = collectSkills(fixture.skillsDir);
+  await scanEvidence(fullSkills, {
+    skillsDir: fixture.skillsDir,
+    piDir: fixture.piDir,
+    source: "pi",
+    fullScan: true,
+  });
+  const fullRow = buildRows(fullSkills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW })
+    .find((r) => r.skill === "fast-full-skill");
+
+  assert.equal(fastRow.pi_usage_count, 1);
+  assert.equal(fullRow.pi_usage_count, 1);
+  assert.equal(fastRow.last_verified_use, fullRow.last_verified_use);
+});
+
+test("groups symlinked duplicate skill installs between .pi/agent and other roots without duplicate identity", () => {
+  const fixture = makeFixture();
+  const targetSkill = fixture.writeSkillAt(fixture.piSkillsDir, "shared-skill");
+  const linkDir = path.join(fixture.agentsSkillsDir, "shared-skill");
+  fs.mkdirSync(path.dirname(linkDir), { recursive: true });
+  fs.symlinkSync(path.dirname(targetSkill), linkDir, "dir");
+
+  const skills = collectSkills([fixture.piSkillsDir, fixture.agentsSkillsDir]);
+  const rows = buildRows(skills, { unusedDays: 45, unusedInstalledDays: 0, now: NOW });
+  const sharedRows = rows.filter((r) => r.skill === "shared-skill");
+  assert.equal(sharedRows.length, 1);
+});
+
+test("fast scan skips lines without candidate strings while full scan parses all lines exhaustively", async () => {
+  const fixture = makeFixture();
+  const sessionDir = path.join(fixture.piDir, "sessions", "exhaustive-test");
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  fixture.writeSkill("candidate-skill");
+
+  fs.writeFileSync(
+    path.join(sessionDir, "session.jsonl"),
+    [
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:00:00Z",
+        message: { role: "user", content: "General chat line without skill" },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:01:00Z",
+        message: { role: "assistant", content: "Another general response line" },
+      }),
+      JSON.stringify({
+        type: "message",
+        timestamp: "2026-06-10T10:02:00Z",
+        message: { role: "user", content: "/skill:candidate-skill" },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  const fastSkills = collectSkills(fixture.skillsDir);
+  const fastStats = await scanEvidence(fastSkills, {
+    skillsDir: fixture.skillsDir,
+    piDir: fixture.piDir,
+    source: "pi",
+    fullScan: false,
+    now: NOW,
+  });
+  assert.equal(fastStats.pi.parsedRecords, 1);
+
+  const fullSkills = collectSkills(fixture.skillsDir);
+  const fullStats = await scanEvidence(fullSkills, {
+    skillsDir: fixture.skillsDir,
+    piDir: fixture.piDir,
+    source: "pi",
+    fullScan: true,
+    now: NOW,
+  });
+  assert.equal(fullStats.pi.parsedRecords, 3);
 });

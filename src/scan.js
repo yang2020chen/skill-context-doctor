@@ -10,15 +10,15 @@ import { ageDays, timestampFromRecord } from "./model.js";
 const SKILL_BLOCK_RE =
   /<skill>\s*<name>([^<]+)<\/name>\s*<path>([^<]+)<\/path>[\s\S]*?<\/skill>/g;
 const DOT_SKILL_PATH_RE =
-  /(?<path>(?:~|\/[^"'<>\s]+)?\/\.(?:agents|claude|codex|cursor)\/skills\/(?<name>[^\/"'<>\s]+)\/SKILL\.md)/g;
+  /(?<path>(?:~|\/[^"'<>\s]+)?\/\.(?:agents|claude|codex|cursor|pi\/agent)\/skills\/(?<name>[^\/"'<>\s]+)\/SKILL\.md)/g;
 const RELATIVE_DOT_SKILL_PATH_RE =
-  /(?<path>(?:\.(?:agents|claude|codex|cursor)|\$(?:\{HOME\}|HOME)\/\.(?:agents|claude|codex|cursor))\/skills\/(?<name>[^\/"'<>\s]+)\/SKILL\.md)/g;
+  /(?<path>(?:\.(?:agents|claude|codex|cursor)|\.pi\/agent|\$(?:\{HOME\}|HOME)\/\.(?:agents|claude|codex|cursor|pi\/agent))\/skills\/(?<name>[^\/"'<>\s]+)\/SKILL\.md)/g;
 const BARE_SKILL_PATH_RE =
   /\/skills\/(?<name>[^\/"<>\s]+)\/SKILL\.md/g;
 const BARE_SKILL_SCRIPT_RE =
   /\/skills\/(?<name>[^\/"<>\s]+)\/scripts\//g;
 const CANONICAL_DOT_SKILL_PATH_RE =
-  /(?:^|\/)\.(?:agents|claude|codex|cursor)\/skills\/(?<name>[^/]+)\/SKILL\.md$/;
+  /(?:^|\/)\.(?:agents|claude|codex|cursor|pi\/agent)\/skills\/(?<name>[^/]+)\/SKILL\.md$/;
 const CODEX_PLUGIN_SKILL_PATH_RE =
   /(?<path>(?:~|\/[^"'<>\s]+)?\/\.codex\/plugins\/cache\/[^"'<>\s]+\/(?<name>[^\/"'<>\s]+)\/SKILL\.md)/g;
 const READ_TOOL_NAMES = new Set([
@@ -36,6 +36,8 @@ const READ_COMMAND_RE = new RegExp(
   String.raw`\b${READ_COMMAND_PATTERN}\b[\s\S]*\/SKILL\.md\b`,
 );
 const COMMAND_NAME_RE = /<command-name>([^<]+)<\/command-name>/g;
+const PI_SKILL_COMMAND_RE =
+  /(?:^|[\s,;(`"'])\/skill:([a-zA-Z0-9_-]+)(?=$|[\s,;).`"'])/gm;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -46,7 +48,7 @@ function skillDirs(value) {
 }
 
 function isKnownDotSkillRoot(skillsDir) {
-  return /\/\.(?:agents|claude|codex|cursor)\/skills$/.test(path.resolve(skillsDir));
+  return /\/\.(?:agents|claude|codex|cursor|pi\/agent)\/skills$/.test(path.resolve(skillsDir));
 }
 
 function dynamicSkillPathRes(skillsDirs) {
@@ -69,8 +71,8 @@ function dynamicSkillPathPatterns(skillsDirs) {
 
 function skillPathSearchPattern(skillsDirs) {
   return [
-    String.raw`(?:~|/[^"'<>\s]+)?/\.(?:agents|claude|codex|cursor)/skills/[^/"'<>\s]+/SKILL\.md`,
-    String.raw`(?:\.(?:agents|claude|codex|cursor)|\$(?:\{HOME\}|HOME)/\.(?:agents|claude|codex|cursor))/skills/[^/"'<>\s]+/SKILL\.md`,
+    String.raw`(?:~|/[^"'<>\s]+)?/\.(?:agents|claude|codex|cursor|pi\/agent)/skills/[^/"'<>\s]+/SKILL\.md`,
+    String.raw`(?:\.(?:agents|claude|codex|cursor|pi\/agent)|\$(?:\{HOME\}|HOME)/\.(?:agents|claude|codex|cursor|pi\/agent))/skills/[^/"'<>\s]+/SKILL\.md`,
     String.raw`(?:~|/[^"'<>\s]+)?/\.codex/plugins/cache/.*/[^/"'<>\s]+/SKILL\.md`,
     ...dynamicSkillPathPatterns(skillsDirs),
   ]
@@ -94,7 +96,7 @@ function installedSkillPathSearchPattern(skills) {
   const exactNames = [...names].filter(Boolean).map(escapeRegExp).join("|");
   const relativePaths = exactNames
     ? [
-        String.raw`(?:\.(?:agents|claude|codex|cursor)|\$(?:\{HOME\}|HOME)/\.(?:agents|claude|codex|cursor))/skills/(?:${exactNames})/SKILL\.md`,
+        String.raw`(?:\.(?:agents|claude|codex|cursor|pi\/agent)|\$(?:\{HOME\}|HOME)/\.(?:agents|claude|codex|cursor|pi\/agent))/skills/(?:${exactNames})/SKILL\.md`,
       ]
     : [];
   return [...exactPaths, ...relativePaths].join("|");
@@ -550,6 +552,7 @@ function addSkillIdentityEvidence(skills, skillsDirs, pathText, fallbackName, ev
 }
 
 function addSkillPathReferences(skills, options, text, context) {
+  if (!text || !text.includes("SKILL.md")) return 0;
   const roots = options.skillsDirs || options.skillsDir;
   const customPathRes = dynamicSkillPathRes(roots);
   const usageEvent = Boolean(context.usageEvent);
@@ -806,7 +809,32 @@ function addCommandNameSkillEvidence(skills, text, context) {
   return count;
 }
 
+function piUserText(record) {
+  const msg = record?.message || record;
+  if (msg?.role !== "user") return "";
+  if (typeof msg.content === "string") return msg.content;
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter((x) => x?.type === "text" && typeof x.text === "string")
+      .map((x) => x.text)
+      .join("\n");
+  }
+  return "";
+}
+
+function addPiSkillCommandEvidence(skills, text, context) {
+  let count = 0;
+  if (!text || !text.includes("/skill:")) return 0;
+  for (const match of text.matchAll(PI_SKILL_COMMAND_RE)) {
+    const name = match[1]?.trim();
+    if (!name) continue;
+    count += addSkillNameEvidence(skills, name, context);
+  }
+  return count;
+}
+
 function addReadCommandSkillEvidence(skills, options, text, context) {
+  if (!text || !text.includes("SKILL.md")) return 0;
   let count = 0;
   for (const line of text.split(/\r?\n/)) {
     if (!READ_COMMAND_RE.test(line)) continue;
@@ -1867,6 +1895,90 @@ async function scanFilesystem(skills, options, stats) {
   );
 }
 
+async function scanPi(skills, options, stats) {
+  if (!options.piDir) return;
+  const sessionRoot = path.join(options.piDir, "sessions");
+  const historyRoots = existingRoots([sessionRoot]);
+  addRecentChats(
+    stats,
+    "pi",
+    countRecentFiles(historyRoots, (file) => file.endsWith(".jsonl"), jsonlStartTimestamp, options),
+  );
+
+  const roots = options.scanFiles?.pi?.jsonl || historyRoots;
+  const pattern = [
+    String.raw`\/skill:`,
+    installedSkillPathSearchPattern(skills),
+  ].filter(Boolean).join("|");
+  const shouldProcessRaw = options.fullScan
+    ? () => true
+    : (line) => line.includes("SKILL.md") || line.includes("/skill:");
+
+  await scanMatchingJsonLines(
+    roots,
+    pattern,
+    stats.pi,
+    (record, file, lineNo, rawLine) => {
+      const ts = record ? timestampFromRecord(record) || fileTimestamp(file) : fileTimestamp(file);
+      const text = record ? jsonStrings(record).join("\n") : rawLine;
+      let usageEventCount = 0;
+
+      // Highest priority: user explicitly invoked /skill:name command
+      const userText = record ? piUserText(record) : "";
+      if (userText) {
+        usageEventCount += addPiSkillCommandEvidence(skills, userText, {
+          ts,
+          kind: "pi_agent_transcript_skill_command",
+          source: sourcePointer(file, lineNo),
+          sourceFile: file,
+          sourceLine: lineNo,
+          chatTitle: chatTitle(record, file),
+          stats: stats.pi,
+        });
+      }
+
+      // Strong signal: model issued a structured `read` tool call pointing at SKILL.md
+      usageEventCount += record
+        ? addStructuredToolReadEvidence(skills, options, record, {
+            ts,
+            kind: "pi_agent_transcript_tool_read_skill",
+            source: sourcePointer(file, lineNo),
+            sourceFile: file,
+            sourceLine: lineNo,
+            chatTitle: chatTitle(record, file),
+            stats: stats.pi,
+          })
+        : 0;
+
+      // Strong signal: bash/cat/sed/… command text contains SKILL.md path
+      usageEventCount += addReadCommandSkillEvidence(skills, options, text, {
+        ts,
+        kind: "pi_agent_transcript_skill_read_command",
+        source: sourcePointer(file, lineNo),
+        sourceFile: file,
+        sourceLine: lineNo,
+        chatTitle: chatTitle(record, file),
+        stats: stats.pi,
+      });
+
+      // Weak signal: SKILL.md path appears anywhere in the record (mention only)
+      if (usageEventCount === 0) {
+        addSkillPathReferences(skills, options, text, {
+          ts,
+          kind: "pi_agent_transcript_path_reference",
+          source: sourcePointer(file, lineNo),
+          sourceFile: file,
+          sourceLine: lineNo,
+          chatTitle: chatTitle(record, file),
+          stats: stats.pi,
+        });
+      }
+    },
+    options.fullScan,
+    shouldProcessRaw,
+  );
+}
+
 export function historyFilesBySource(options) {
   const child = (root, ...parts) => root ? path.join(root, ...parts) : "";
   const files = (roots, extension) => [
@@ -1913,6 +2025,9 @@ export function historyFilesBySource(options) {
       jsonl: files(options.evidenceDirs || [], ".jsonl"),
       json: files(options.evidenceDirs || [], ".json"),
     },
+    pi: {
+      jsonl: files([child(options.piDir, "sessions")], ".jsonl"),
+    },
   };
 }
 
@@ -1937,6 +2052,7 @@ export function newStats() {
     opencode: scan(),
     cursor: scan(),
     filesystem: scan(),
+    pi: scan(),
   };
 }
 
@@ -1951,6 +2067,7 @@ export async function scanEvidence(skills, options) {
     ["opencode", scanOpencode],
     ["cursor", scanCursor],
     ["filesystem", scanFilesystem],
+    ["pi", scanPi],
   ]);
 
   for (const [source, scanner] of scanners) {
