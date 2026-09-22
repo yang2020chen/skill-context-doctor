@@ -19,7 +19,7 @@ import { buildRows } from "../src/model.js";
 import { loadOmitPatterns } from "../src/omit.js";
 import { collectSkills, scanEvidence } from "../src/scan.js";
 import { scanSkillsInWorker } from "../src/scan-worker.js";
-import { quarantineCandidates } from "../src/quarantine.js";
+import { quarantineCandidates, restoreCleanupRun } from "../src/quarantine.js";
 import { renderInteractiveUndoScreen } from "../src/undo-interactive.js";
 import { formatCommands, formatTable } from "../src/output.js";
 import { renderLogo } from "../src/logo.js";
@@ -97,7 +97,7 @@ function makeFixture() {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
       file,
-      `---\nname: ${name}\ndescription: ${name} fixture skill for cleanup tests\n---\n# ${name}\n`,
+      `---\nname: ${name}\ndescription: ${name} fixture skill for cleanup tests\n${name === "never-used" ? "disable-model-invocation: true\n" : ""}---\n# ${name}\n`,
     );
     return file;
   };
@@ -1395,7 +1395,7 @@ test("direct list json includes risk and token cost without status", async () =>
   assert.equal(payload.summary.usedWindowTokens > 0, true);
   assert.equal(payload.savingsDays, 30);
   assert.equal(payload.summary.recentNewChats, 1);
-  assert.equal(payload.summary.potentialCandidateNewChatTokens, 22);
+  assert.equal(payload.summary.potentialCandidateNewChatTokens, 11);
   assert.equal(payload.summary.recentActivitySignals, 2);
 });
 
@@ -1434,11 +1434,11 @@ test("direct cleanup apply and undo latest commands work", async () => {
     },
   );
 
-  assert.match(cleanupStdout, /Done: Quarantined 2 skills/);
-  assert.match(cleanupStdout, /Saved per skill-catalog load: 22 description tokens/);
-  assert.match(cleanupStdout, /Potential new-chat savings: 22 x 1 new chat in last 30 days = 22 tokens/);
+  assert.match(cleanupStdout, /Done: Quarantined 1 skill/);
+  assert.match(cleanupStdout, /Saved per skill-catalog load: 0 description tokens/);
+  assert.match(cleanupStdout, /Potential new-chat savings: 0 x 1 new chat in last 30 days = 0 tokens/);
   assert.match(cleanupStdout, /Command: skill-context-doctor --undo /);
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
 
   let undoStdout = "";
@@ -1448,9 +1448,66 @@ test("direct cleanup apply and undo latest commands work", async () => {
     stderr: { write: () => {} },
   });
 
-  assert.match(undoStdout, /Restored 2 skills/);
+  assert.match(undoStdout, /Restored 1 skills/);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
+});
+
+test("cleanup quarantines only removal candidates and records each move before it happens", () => {
+  const fixture = makeFixture();
+  const firstSkill = fixture.writeSkill("transaction-one");
+  const secondSkill = fixture.writeSkill("transaction-two");
+  const firstDir = path.dirname(firstSkill);
+  const secondDir = path.dirname(secondSkill);
+  const rows = [
+    {
+      skill: "transaction-one",
+      skill_dir: firstDir,
+      cleanup_candidate: true,
+      cleanup_eligible: true,
+      cleanup_reason: "never used; installed 10 days ago",
+      description_token_cost: 0,
+      recent_usage_count: 0,
+      recent_mention_count: 0,
+    },
+    {
+      skill: "transaction-two",
+      skill_dir: secondDir,
+      cleanup_candidate: true,
+      cleanup_eligible: true,
+      cleanup_reason: "never used; installed 10 days ago",
+      description_token_cost: 0,
+      recent_usage_count: 0,
+      recent_mention_count: 0,
+    },
+  ];
+  const renameSync = fs.renameSync;
+  let manifest = "";
+  fs.renameSync = (from, to) => {
+    if (from === secondDir) throw new Error("simulated second move failure");
+    return renameSync(from, to);
+  };
+  try {
+    assert.throws(
+      () => quarantineCandidates(rows, { stateDir: fixture.stateDir, now: NOW }),
+      (error) => {
+        manifest = error.cleanupManifest;
+        return /simulated second move failure/.test(error.message);
+      },
+    );
+  } finally {
+    fs.renameSync = renameSync;
+  }
+
+  const recorded = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  assert.equal(recorded.status, "failed");
+  assert.equal(recorded.entries.length, 2);
+  assert.equal(fs.existsSync(firstDir), false);
+  assert.equal(fs.existsSync(secondDir), true);
+
+  const restored = restoreCleanupRun(fixture.stateDir, "latest");
+  assert.equal(restored.restored.length, 1);
+  assert.equal(fs.existsSync(firstDir), true);
 });
 
 test("formats cleanup result with colors and token savings", () => {
@@ -1780,18 +1837,18 @@ test("interactive e2e selects with enter and quarantines confirmed rows", async 
   press(stdin, "enter", "\r");
   await waitForOutput(stdout, /skill-context-doctor confirm cleanup/);
   assert.match(stdout.output, /You are going to remove 1 skill from active use/);
-  assert.match(stdout.output, /11 tokens saved per new conversation/);
+  assert.match(stdout.output, /0 tokens saved per new conversation/);
   assert.match(stdout.output, /1 conversation in the last 30 days/);
-  assert.match(stdout.output, /≈ 11 tokens saved per month/);
+  assert.match(stdout.output, /≈ 0 tokens saved per month/);
   press(stdin, "down");
   await waitForOutput(stdout, /Press Enter to quarantine, d to delete permanently, or Esc to review/);
   press(stdin, "enter", "\r");
 
   const result = await run;
   assert.equal(result.cleanup.count, 1);
-  assert.equal(result.cleanup.entries[0].skill, "stale-skill");
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
+  assert.equal(result.cleanup.entries[0].skill, "never-used");
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
   assert.match(stdout.output, /Done: Quarantined 1 skill/);
   assert.equal(stdin.paused, true);
   assert.equal(stdin.isRaw, false);
@@ -1843,9 +1900,9 @@ test("interactive e2e permanently deletes only after typed confirmation", async 
   assert.equal(result.cleanup.mode, "delete");
   assert.equal(result.cleanup.count, 1);
   assert.equal(result.cleanup.manifest, "");
-  assert.equal(result.cleanup.entries[0].skill, "stale-skill");
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
+  assert.equal(result.cleanup.entries[0].skill, "never-used");
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
   assert.equal(fs.existsSync(path.join(fixture.stateDir, "runs")), false);
   assert.match(stdout.output, /Done: Permanently deleted 1 skill/);
   assert.match(stdout.output, /Permanent delete does not write an undo manifest/);
@@ -1978,12 +2035,12 @@ test("interactive e2e omits current row and persists omit pattern", async () => 
 
   await waitForOutput(stdout, /Keys: \/ search/);
   press(stdin, "o");
-  await waitForOutput(stdout, /Omitted stale-skill/);
+  await waitForOutput(stdout, /Omitted never-used/);
   press(stdin, "q");
 
   const result = await run;
   assert.equal(result.cancelled, true);
-  assert.match(fs.readFileSync(omitFile, "utf8"), /^stale-skill$/m);
+  assert.match(fs.readFileSync(omitFile, "utf8"), /^never-used$/m);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
 });
@@ -2021,9 +2078,9 @@ test("apply quarantines candidates and undo restores them", async () => {
     },
   );
 
-  assert.match(stdout, /Done: Quarantined 2 skills/);
+  assert.match(stdout, /Done: Quarantined 1 skill/);
   assert.match(stdout, /Manifest:/);
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("mention-only"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("recent-skill"))), true);
@@ -2044,7 +2101,7 @@ test("apply quarantines candidates and undo restores them", async () => {
     },
   );
 
-  assert.match(undoStdout, /Restored 2 skills/);
+  assert.match(undoStdout, /Restored 1 skills/);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("mention-only"))), true);
@@ -2060,7 +2117,7 @@ test("apply quarantines symlinked skills without moving the symlink target", asy
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(
     targetSkill,
-    "---\nname: linked-skill\ndescription: linked skill fixture\n---\n# linked-skill\n",
+    "---\nname: linked-skill\ndescription: linked skill fixture\ndisable-model-invocation: true\n---\n# linked-skill\n",
   );
   fs.mkdirSync(path.dirname(linkDir), { recursive: true });
   fs.symlinkSync(targetDir, linkDir, "dir");
@@ -2171,9 +2228,9 @@ test("apply removes Vercel skills lock entries and undo restores them", async ()
     );
 
     assert.match(stdout, /Vercel skills lock/);
-    assert.match(stdout, /Removed 2 entries/);
+    assert.match(stdout, /Removed 1 entries/);
     const lockAfterApply = JSON.parse(fs.readFileSync(lockPath, "utf8"));
-    assert.equal(lockAfterApply.skills["stale-skill"], undefined);
+    assert.equal(lockAfterApply.skills["stale-skill"].source, "vercel-labs\/agent-skills");
     assert.equal(lockAfterApply.skills["never-used"], undefined);
     assert.equal(lockAfterApply.skills["recent-skill"].source, "vercel-labs/agent-skills");
     assert.equal(lockAfterApply.dismissed.findSkillsPrompt, true);
@@ -2182,9 +2239,9 @@ test("apply removes Vercel skills lock entries and undo restores them", async ()
       fs.readFileSync(path.join(fixture.stateDir, "latest.json"), "utf8"),
     );
     const manifest = JSON.parse(fs.readFileSync(latestState.manifest, "utf8"));
-    const staleEntry = manifest.entries.find((entry) => entry.skill === "stale-skill");
-    assert.equal(staleEntry.vercelLockEntries[0].lockPath, lockPath);
-    assert.equal(staleEntry.vercelLockEntries[0].entry.skillFolderHash, "hash-stale-skill");
+    const neverUsedEntry = manifest.entries.find((entry) => entry.skill === "never-used");
+    assert.equal(neverUsedEntry.vercelLockEntries[0].lockPath, lockPath);
+    assert.equal(neverUsedEntry.vercelLockEntries[0].entry.skillFolderHash, "hash-never-used");
 
     let undoStdout = "";
     await main(
@@ -2196,7 +2253,7 @@ test("apply removes Vercel skills lock entries and undo restores them", async ()
       },
     );
 
-    assert.match(undoStdout, /Vercel skills lock: restored 2 entries/);
+    assert.match(undoStdout, /Vercel skills lock: restored 1 entries/);
     const lockAfterUndo = JSON.parse(fs.readFileSync(lockPath, "utf8"));
     assert.equal(lockAfterUndo.skills["stale-skill"].skillFolderHash, "hash-stale-skill");
     assert.equal(lockAfterUndo.skills["never-used"].skillFolderHash, "hash-never-used");
@@ -2243,7 +2300,7 @@ test("interactive undo restores a selected cleanup run", async () => {
     },
   );
 
-  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
+  assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
 
   const stdin = new FakeStdin();
@@ -2259,7 +2316,7 @@ test("interactive undo restores a selected cleanup run", async () => {
   );
 
   await waitForOutput(stdout, /skill-context-doctor interactive undo/);
-  assert.match(stdout.output, /2\s+available/);
+  assert.match(stdout.output, /1\s+available/);
   press(stdin, "enter", "\r");
   await waitForOutput(stdout, /! REVIEW RESTORE/);
   assert.match(stdout.output, /Press Enter to restore\. Press Esc to return to review/);
@@ -2268,10 +2325,10 @@ test("interactive undo restores a selected cleanup run", async () => {
   press(stdin, "enter", "\r");
 
   const result = await run;
-  assert.equal(result.undo.restored.length, 2);
+  assert.equal(result.undo.restored.length, 1);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), true);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), true);
-  assert.match(stdout.output, /Restored 2 skills/);
+  assert.match(stdout.output, /Restored 1 skills/);
   assert.equal(stdin.paused, true);
   assert.equal(stdin.isRaw, false);
 });

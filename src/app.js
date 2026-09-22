@@ -68,6 +68,24 @@ function printVercelLockResult(stdout, vercelLocks, action) {
   }
 }
 
+function restrictCleanupToRecommendations(rows, recommendations) {
+  const bySkill = new Map(recommendations.map((item) => [item.skill, item]));
+  return rows.map((row) => {
+    const recommendation = bySkill.get(row.skill);
+    const cleanupEligible =
+      Boolean(row.cleanup_candidate) && recommendation?.action === "REMOVE CANDIDATE";
+    if (cleanupEligible) return { ...row, cleanup_eligible: true };
+    if (!row.cleanup_candidate) return { ...row, cleanup_eligible: false };
+    return {
+      ...row,
+      cleanup_eligible: false,
+      cleanup_candidate: false,
+      cleanup_reason: `requires review: ${recommendation?.action || "NO_RECOMMENDATION"}`,
+      risk: "protected",
+    };
+  });
+}
+
 export async function main(argv = process.argv.slice(2), io = {}) {
   const stdout = io.stdout || process.stdout;
   const now = io.now || new Date();
@@ -153,7 +171,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   }
   const omitPatterns = loadOmitPatterns(options);
   const modelOptions = { ...options, now, omitPatterns };
-  const rows = buildRows(skills, modelOptions);
+  let rows = buildRows(skills, modelOptions);
+  if (!options.command || options.command === "cleanup") {
+    const cleanupAudit = buildAuditReport(skills, rows, { ...options, now });
+    const cleanupRecommendations = buildRecommendations(cleanupAudit, { ...options, now });
+    rows = restrictCleanupToRecommendations(rows, cleanupRecommendations.recommendations);
+  }
   const payload = payloadFor(rows, modelOptions, scanStats, now);
 
   if (options.command === "audit") {

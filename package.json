@@ -1,6 +1,6 @@
 {
   "name": "skill-context-doctor",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Audit real AI agent skill usage, context overhead, stale skills, duplicates, and broken installations.",
   "type": "module",
   "repository": {

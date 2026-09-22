@@ -539,7 +539,7 @@ test("formatRecommendationReport renders summary banner and sections cleanly", (
 
   const text = formatRecommendationReport(report);
   assert.match(text, /Skill Context Doctor/);
-  assert.match(text, /Recommendations \(v0\.2\.0\)/);
+  assert.match(text, /Skill Context Doctor - Recommendations/);
   assert.match(text, /KEEP\s+4/);
   assert.match(text, /HIDE\s+3/);
   assert.match(text, /Potential visible context savings:\s+850 tokens/);
@@ -592,7 +592,7 @@ test("recommend command throws error if --apply is provided", async () => {
       await main(["recommend", "--apply"]);
     },
     {
-      message: /recommend does not support --apply in v0.2 \(recommendations are advisory\)/,
+      message: /recommend does not support --apply \(recommendations are advisory\)/,
     },
   );
 });

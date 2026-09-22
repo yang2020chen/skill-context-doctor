@@ -263,7 +263,7 @@ export function formatRecommendationReport(report, options = {}) {
   const lines = [
     renderLogo(),
     "",
-    "Skill Context Doctor - Recommendations (v0.2.0)",
+    "Skill Context Doctor - Recommendations",
     `Analysis Scope: ${analysisScope} evidence sources${displaySource ? ` (display filter: ${displaySource})` : ""}`,
     "",
     "Summary",
@@ -333,7 +333,7 @@ export function formatRecommendationReport(report, options = {}) {
 
   lines.push("Next steps:");
   lines.push("  • Run `skill-context-doctor audit` to inspect full usage statistics and source breakdowns.");
-  lines.push("  • Run `skill-context-doctor cleanup` to review or prune cleanup candidates.");
+  lines.push("  • Run `skill-context-doctor cleanup` to review already-hidden removal candidates.");
   lines.push("");
 
   return `${lines.join("\n")}\n`;

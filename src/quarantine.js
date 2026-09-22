@@ -26,7 +26,24 @@ function readJson(file) {
 
 function writeJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    const fd = fs.openSync(temporary, "r");
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fs.renameSync(temporary, file);
+    try {
+      const directoryFd = fs.openSync(path.dirname(file), "r");
+      fs.fsyncSync(directoryFd);
+      fs.closeSync(directoryFd);
+    } catch {}
+  } catch (error) {
+    try {
+      fs.unlinkSync(temporary);
+    } catch {}
+    throw error;
+  }
 }
 
 function pathExistsOrSymlink(file) {
@@ -130,7 +147,7 @@ export function resolveUndoManifest(stateDir, undoTarget) {
 }
 
 export function quarantineCandidates(rows, options) {
-  const candidates = rows.filter((row) => row.cleanup_candidate);
+  const candidates = rows.filter((row) => row.cleanup_candidate && row.cleanup_eligible);
   if (candidates.length === 0) {
     return {
       mode: "quarantine",
@@ -144,49 +161,69 @@ export function quarantineCandidates(rows, options) {
 
   const runDir = uniqueRunDir(options.stateDir, options.now);
   const itemsDir = path.join(runDir, "items");
-  const entries = [];
-
-  fs.mkdirSync(itemsDir, { recursive: true });
-  let itemIndex = 0;
-  for (const row of candidates) {
-    for (const install of rowInstalls(row)) {
-      itemIndex += 1;
-      const itemDir = path.join(
-        itemsDir,
-        `${String(itemIndex).padStart(4, "0")}-${row.skill.replaceAll("/", "_")}`,
-      );
-      if (!pathExistsOrSymlink(install.skillDir)) continue;
-      fs.renameSync(install.skillDir, itemDir);
-      entries.push(
-        cleanupEntry(row, {
-          install,
-          installRoot: install.installRoot || "",
-          quarantinedPath: itemDir,
-        }),
-      );
-    }
-  }
-
-  const vercelLocks = removeSkillsFromVercelLocks(
-    entries.map((entry) => entry.skill),
-    options,
-  );
-  for (const entry of entries) {
-    const locks = vercelLocks.entriesBySkill.get(entry.skill);
-    if (locks?.length) entry.vercelLockEntries = locks;
-  }
-
   const manifest = {
     version: 1,
     id: path.basename(runDir),
     createdAt: options.now.toISOString(),
     stateDir: options.stateDir,
-    entries,
+    status: "preparing",
+    entries: [],
   };
+
+  // Record each move intent before renaming. A process interruption after a
+  // rename still leaves an undoable path in this manifest.
   writeJson(manifestPath(runDir), manifest);
   writeJson(path.join(options.stateDir, "latest.json"), {
     manifest: manifestPath(runDir),
   });
+
+  const entries = manifest.entries;
+  let vercelLocks = { removed: [], errors: [], entriesBySkill: new Map() };
+  try {
+    fs.mkdirSync(itemsDir, { recursive: true });
+    let itemIndex = 0;
+    for (const row of candidates) {
+      for (const install of rowInstalls(row)) {
+        itemIndex += 1;
+        const itemDir = path.join(
+          itemsDir,
+          `${String(itemIndex).padStart(4, "0")}-${row.skill.replaceAll("/", "_")}`,
+        );
+        if (!pathExistsOrSymlink(install.skillDir)) continue;
+
+        const entry = cleanupEntry(row, {
+          install,
+          installRoot: install.installRoot || "",
+          quarantinedPath: itemDir,
+          state: "planned",
+        });
+        entries.push(entry);
+        writeJson(manifestPath(runDir), manifest);
+        fs.renameSync(install.skillDir, itemDir);
+        entry.state = "moved";
+        writeJson(manifestPath(runDir), manifest);
+      }
+    }
+
+    vercelLocks = removeSkillsFromVercelLocks(
+      entries.map((entry) => entry.skill),
+      options,
+    );
+    for (const entry of entries) {
+      const locks = vercelLocks.entriesBySkill.get(entry.skill);
+      if (locks?.length) entry.vercelLockEntries = locks;
+    }
+    manifest.status = "completed";
+    writeJson(manifestPath(runDir), manifest);
+  } catch (error) {
+    manifest.status = "failed";
+    manifest.error = error?.message || String(error);
+    try {
+      writeJson(manifestPath(runDir), manifest);
+    } catch {}
+    error.cleanupManifest = manifestPath(runDir);
+    throw error;
+  }
 
   return {
     mode: "quarantine",

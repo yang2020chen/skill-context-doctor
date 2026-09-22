@@ -370,6 +370,7 @@ export function buildRows(skills, options) {
         mtime: formatDate(usage.mtime),
         mtime_age_days: ageDays(usage.mtime, now),
         cleanup_candidate: cleanupCandidate,
+        cleanup_eligible: cleanupCandidate,
         cleanup_reason: cleanupReason,
         remove_command: usage.installs
           .map((item) => `rm -rf ${shellQuote(item.skillDir)}`)

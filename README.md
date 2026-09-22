@@ -104,7 +104,7 @@ Evaluates every skill against an 11-step deterministic rule hierarchy, categoriz
 | `KEEP` | Verified recent usage (≤45d) or system/internal (`.dot` prefix). | Protected from any changes. |
 | `HIDE` | Model-visible but never used (≥7d) or stale with significant context cost (≥50 tokens). | Reclaim context tokens by adding `disable-model-invocation: true`. Leaves skill files untouched. |
 | `REVIEW` | Cross-agent shared, broken symlink, duplicate install across roots, or recent mention without run. | Human review required; never modified automatically. |
-| `REMOVE CANDIDATE` | Already hidden from prompt AND never used. | Safe candidate for file uninstallation (`cleanup`). |
+| `REMOVE CANDIDATE` | Already hidden from prompt AND never used. | Eligible for reversible quarantine with `cleanup`. |
 
 ```bash
 skill-context-doctor recommend
@@ -144,6 +144,15 @@ skill-context-doctor optimize --apply --keep my-skill
 
 # Undo the last optimization run
 skill-context-doctor undo latest
+```
+
+### Optional: reversible cleanup of removal candidates
+
+`cleanup` only quarantines skills classified as `REMOVE CANDIDATE`: they must already be hidden from model invocation, have no verified usage, and have no recent mention. It never removes an active model-visible skill. Each move is recorded before it happens, so `undo latest` can recover an interrupted cleanup run as well.
+
+```bash
+skill-context-doctor cleanup
+skill-context-doctor cleanup --apply
 ```
 
 ---

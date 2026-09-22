@@ -431,7 +431,7 @@ export function applyOptimization(plan, options = {}) {
 
   const manifest = {
     schemaVersion: 1,
-    toolVersion: "0.3.0",
+    toolVersion: "0.3.3",
     type: "optimize",
     id: runId,
     createdAt: now.toISOString(),

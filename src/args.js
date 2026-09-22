@@ -336,7 +336,7 @@ export function parseArgs(argv) {
     throw new Error("--undo cannot be combined with scan/output/apply options");
   }
   if (options.command === "recommend" && options.apply) {
-    throw new Error("recommend does not support --apply in v0.2 (recommendations are advisory)");
+    throw new Error("recommend does not support --apply (recommendations are advisory)");
   }
   if (options.command === "audit" && options.apply) {
     throw new Error("audit does not support --apply");
