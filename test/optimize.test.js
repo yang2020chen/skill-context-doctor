@@ -681,3 +681,38 @@ test("CLI optimize --limit limits planned targets to specified count", async () 
   assert.equal(plan.summary.plannedCount, 2);
   assert.equal(plan.planned.length, 2);
 });
+
+test("planOptimization sorts deterministically by token savings DESC and skill name ASC as tie-breaker", () => {
+  const auditReport = { summary: {} };
+  const recReport = {
+    recommendations: [
+      { skill: "zebra", action: "HIDE", confidence: "high", reasonCodes: ["VISIBLE_NEVER_USED"], visibleTokens: 100 },
+      { skill: "apple", action: "HIDE", confidence: "high", reasonCodes: ["VISIBLE_NEVER_USED"], visibleTokens: 100 },
+      { skill: "mango", action: "HIDE", confidence: "high", reasonCodes: ["VISIBLE_NEVER_USED"], visibleTokens: 200 },
+      { skill: "banana", action: "HIDE", confidence: "high", reasonCodes: ["VISIBLE_NEVER_USED"], visibleTokens: 100 },
+    ],
+  };
+
+  const fixture = makeOptimizeFixture();
+  const z = fixture.addSkill("zebra", { frontmatter: { description: "Z" } });
+  const a = fixture.addSkill("apple", { frontmatter: { description: "A" } });
+  const m = fixture.addSkill("mango", { frontmatter: { description: "M" } });
+  const b = fixture.addSkill("banana", { frontmatter: { description: "B" } });
+
+  const skillsMap = new Map([
+    ["root:zebra", { skill: "zebra", path: z.skillPath, realPath: z.skillPath }],
+    ["root:apple", { skill: "apple", path: a.skillPath, realPath: a.skillPath }],
+    ["root:mango", { skill: "mango", path: m.skillPath, realPath: m.skillPath }],
+    ["root:banana", { skill: "banana", path: b.skillPath, realPath: b.skillPath }],
+  ]);
+
+  const plan = planOptimization(auditReport, recReport, skillsMap, { stateDir: fixture.stateDir });
+  assert.equal(plan.planned.length, 4);
+
+  // Highest token savings first (mango: 200)
+  assert.equal(plan.planned[0].skill, "mango");
+  // Tie-breaker: 100 tokens sorted alphabetically (apple, banana, zebra)
+  assert.equal(plan.planned[1].skill, "apple");
+  assert.equal(plan.planned[2].skill, "banana");
+  assert.equal(plan.planned[3].skill, "zebra");
+});

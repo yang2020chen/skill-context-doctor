@@ -49,6 +49,8 @@ export const DEFAULT_OPTIONS = {
   noInteractive: false,
   apply: false,
   undo: "",
+  help: false,
+  version: false,
 };
 
 export const INTERACTIVE_UNDO = "__interactive_undo__";
@@ -153,6 +155,7 @@ Options:
   --full-scan                     Parse every JSONL line instead of using ripgrep prefilter
   --no-cache                      Bypass incremental scan evidence for this run
   -h, --help                      Show help
+  -v, --version                   Show version number
 
 Default skill roots are ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, and ~/.pi/agent/skills.
 Default behavior is interactive when stdin/stdout are terminals, otherwise static dry-run.
@@ -280,6 +283,8 @@ export function parseArgs(argv) {
       options.json = true;
     } else if (arg === "--help" || arg === "-h") {
       options.help = true;
+    } else if (arg === "--version" || arg === "-v") {
+      options.version = true;
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }

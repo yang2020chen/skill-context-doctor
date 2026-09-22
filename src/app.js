@@ -78,6 +78,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return null;
   }
 
+  if (options.version) {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    write(stdout, `${pkg.version}\n`);
+    return null;
+  }
+
   if (options.command === "omit") {
     const results = options.commandArgs.map((pattern) => appendOmitPattern(options, pattern));
     for (const result of results) {

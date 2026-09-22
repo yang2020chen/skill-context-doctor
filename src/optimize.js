@@ -341,12 +341,18 @@ export function planOptimization(auditReport, recReport, skills, options = {}) {
     planned.push(plannedItem);
   }
 
-  // If --limit N is explicitly passed, take top N items by highest token savings
+  // Always sort planned items deterministically: token savings DESC, skill name ASC as tie-breaker
+  planned.sort((a, b) => {
+    if (b.estimatedTokenSavings !== a.estimatedTokenSavings) {
+      return b.estimatedTokenSavings - a.estimatedTokenSavings;
+    }
+    return a.skill.localeCompare(b.skill);
+  });
+
+  // If --limit N is explicitly passed, take top N items
   let finalPlanned = planned;
   if (options.limitExplicit && options.limit > 0 && planned.length > options.limit) {
-    finalPlanned = [...planned]
-      .sort((a, b) => b.estimatedTokenSavings - a.estimatedTokenSavings)
-      .slice(0, options.limit);
+    finalPlanned = planned.slice(0, options.limit);
   }
 
   const totalSavings = finalPlanned.reduce((acc, item) => acc + item.estimatedTokenSavings, 0);

@@ -208,6 +208,22 @@ test("defaults to common installed skill roots and allows repeatable path overri
   assert.equal(customOnly.skillsDirs.includes(pluginSkills), false);
 });
 
+test("supports --version and -v options", async () => {
+  assert.equal(parseArgs(["--version"]).version, true);
+  assert.equal(parseArgs(["-v"]).version, true);
+
+  let output = "";
+  const io = {
+    stdout: {
+      write(chunk) {
+        output += chunk;
+      },
+    },
+  };
+  await main(["--version"], io);
+  assert.match(output.trim(), /^\d+\.\d+\.\d+$/);
+});
+
 test("formats human numbers with separators", () => {
   assert.equal(formatNumber(11198), "11,198");
   assert.equal(formatNumber(33594.5), "33,594.5");
