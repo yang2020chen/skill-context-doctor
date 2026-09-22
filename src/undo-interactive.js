@@ -2,6 +2,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { colors, shouldUseColor } from "./ansi.js";
 import { listCleanupRuns, restoreCleanupRun } from "./quarantine.js";
+import { restoreOptimizationRun } from "./optimize.js";
 
 function write(stream, text) {
   stream.write(text);
@@ -156,7 +157,10 @@ export async function runInteractiveUndo(options, io = {}) {
 
     function restoreCurrent() {
       const run = runs[state.cursor];
-      const result = restoreCleanupRun(options.stateDir, run.manifest);
+      const result =
+        run.type === "optimize"
+          ? restoreOptimizationRun(options.stateDir, run.manifest)
+          : restoreCleanupRun(options.stateDir, run.manifest);
       finished = true;
       cleanup();
       resolve({ interactive: true, undo: result });

@@ -1,6 +1,6 @@
 {
   "name": "skill-context-doctor",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Audit real AI agent skill usage, context overhead, stale skills, duplicates, and broken installations.",
   "type": "module",
   "repository": {
@@ -42,7 +42,7 @@
     "test": "node --test test/*.test.js",
     "test:pathgrade": "PATHGRADE_CODEX_TRANSPORT=exec pathgrade run --diagnostics -- --config vitest.config.mts",
     "link:local": "node scripts/link-local.mjs",
-    "check": "node --check bin/skill-context-doctor.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/audit.js && node --check src/recommend.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/scan.js && node --check src/scan-cache.js && node --check src/scan-worker.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js",
+    "check": "node --check bin/skill-context-doctor.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/audit.js && node --check src/recommend.js && node --check src/keep.js && node --check src/optimize.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/scan.js && node --check src/scan-cache.js && node --check src/scan-worker.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js",
     "lint": "npm run check",
     "build": "npm pack --dry-run"
   },

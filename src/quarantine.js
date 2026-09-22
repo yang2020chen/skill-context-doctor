@@ -85,6 +85,7 @@ export function listCleanupRuns(stateDir) {
           id,
           manifest: file,
           createdAt: manifest.createdAt || "",
+          type: manifest.type || "quarantine",
           entries,
           restoredAt: manifest.restoredAt || "",
           restored: Array.isArray(manifest.restored) ? manifest.restored : [],
@@ -106,6 +107,18 @@ function latestManifest(stateDir) {
 
 export function resolveUndoManifest(stateDir, undoTarget) {
   if (!undoTarget || undoTarget === "latest") {
+    const latestFile = path.join(stateDir, "latest.json");
+    if (fs.existsSync(latestFile)) {
+      try {
+        const latestData = readJson(latestFile);
+        if (latestData?.manifest && fs.existsSync(latestData.manifest)) {
+          return latestData.manifest;
+        }
+        if (latestData?.runDir && fs.existsSync(manifestPath(latestData.runDir))) {
+          return manifestPath(latestData.runDir);
+        }
+      } catch {}
+    }
     const latest = latestManifest(stateDir);
     if (!latest) throw new Error(`No cleanup runs found in ${path.join(stateDir, "runs")}`);
     return latest;

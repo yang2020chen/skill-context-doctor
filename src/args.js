@@ -39,6 +39,9 @@ export const DEFAULT_OPTIONS = {
   omitPatterns: [],
   omitFile: "~/.config/skill-context-doctor/omit",
   noOmitFile: false,
+  keepPatterns: [],
+  keepFile: "~/.config/skill-context-doctor/keep",
+  noKeepFile: false,
   commands: false,
   interactive: false,
   noInteractive: false,
@@ -47,7 +50,7 @@ export const DEFAULT_OPTIONS = {
 };
 
 export const INTERACTIVE_UNDO = "__interactive_undo__";
-const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit", "recommend"]);
+const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit", "recommend", "optimize"]);
 
 export function expandHome(value, home = os.homedir()) {
   if (!value) return value;
@@ -103,6 +106,7 @@ Usage: skill-context-doctor [command] [options]
 Commands:
   audit                          Generate unified health & context overhead report
   recommend                      Generate actionable recommendations (KEEP/HIDE/REVIEW/REMOVE CANDIDATE)
+  optimize                       Safely execute recommendations (HIDE unused/stale skills)
   list                           Scan skills and print the normal report
   cleanup                        Scan skills, optionally with --apply
   omit <skill-or-pattern>         Add persistent omit patterns
@@ -136,6 +140,9 @@ Options:
   --allowlist PATTERN             Alias for --omit
   --omit-file PATH                Omit file (default: ~/.config/skill-context-doctor/omit)
   --no-omit-file                  Ignore the default omit file
+  --keep SKILL                    Protect specific skill name from optimization (repeatable)
+  --keep-file PATH                Keep file (default: ~/.config/skill-context-doctor/keep)
+  --no-keep-file                  Ignore the default keep file
   --interactive                   Force interactive terminal review
   --no-interactive                Print the static table instead of terminal review
   --apply                         Move cleanup candidates to quarantine
@@ -236,6 +243,14 @@ export function parseArgs(argv) {
       i += 1;
     } else if (arg === "--no-omit-file") {
       options.noOmitFile = true;
+    } else if (arg === "--keep") {
+      options.keepPatterns.push(readNext(argv, i, arg));
+      i += 1;
+    } else if (arg === "--keep-file") {
+      options.keepFile = readNext(argv, i, arg);
+      i += 1;
+    } else if (arg === "--no-keep-file") {
+      options.noKeepFile = true;
     } else if (arg === "--commands") {
       options.commands = true;
     } else if (arg === "--interactive") {
@@ -291,7 +306,7 @@ export function parseArgs(argv) {
   if (!["codex", "claude", "opencode", "cursor", "filesystem", "pi", "all"].includes(options.source)) {
     throw new Error("--source must be codex, claude, opencode, cursor, filesystem, pi, or all");
   }
-  if (options.apply && options.json) {
+  if (options.command !== "optimize" && options.apply && options.json) {
     throw new Error("--apply cannot be combined with --json");
   }
   if (options.apply && options.commands) {
@@ -312,7 +327,12 @@ export function parseArgs(argv) {
   if (options.command === "audit" && options.apply) {
     throw new Error("audit does not support --apply");
   }
-  if (options.interactive && (options.command === "audit" || options.command === "recommend")) {
+  if (
+    options.interactive &&
+    (options.command === "audit" ||
+      options.command === "recommend" ||
+      options.command === "optimize")
+  ) {
     throw new Error(`--interactive cannot be combined with ${options.command}`);
   }
 
@@ -362,6 +382,13 @@ export function parseArgs(argv) {
     stateDir: path.resolve(expandHome(options.stateDir)),
     omitFile: path.resolve(expandHome(options.omitFile)),
     omitPatterns: options.omitPatterns.flatMap((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+    keepFile: path.resolve(expandHome(options.keepFile)),
+    keepPatterns: options.keepPatterns.flatMap((value) =>
       value
         .split(",")
         .map((item) => item.trim())

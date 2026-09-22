@@ -250,6 +250,7 @@ export function shouldRunInteractive(options, io = {}) {
     options.command === "list" ||
     options.command === "audit" ||
     options.command === "recommend" ||
+    options.command === "optimize" ||
     options.apply ||
     options.commands ||
     options.json ||

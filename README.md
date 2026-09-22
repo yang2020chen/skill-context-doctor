@@ -137,9 +137,71 @@ popular-cross-tool               CROSS_AGENT_SHARED            Shared across mul
 ...
 ```
 
+### Safe Context Optimization (`optimize`)
+
+`skill-context-doctor optimize` safely executes the `HIDE` recommendations by setting `disable-model-invocation: true` in `SKILL.md` frontmatter.
+- **Dry-run by default**: previews planned modifications, token savings, and keep protections without touching disk.
+- **Zero file deletions**: only sets frontmatter disable flags; skills remain installed and manually invocable (e.g. `/skill:name`).
+- **Two-phase transaction**: creates byte-exact backups before writing, verifies hashes before modifying, and automatically rolls back if any write fails.
+- **Safe undo**: `skill-context-doctor undo latest` restores files byte-for-byte, refusing to overwrite manual edits made after optimization.
+
+```bash
+# Preview planned context optimization (dry-run)
+skill-context-doctor optimize
+
+# Execute context optimization
+skill-context-doctor optimize --apply
+
+# Protect specific skills from being hidden
+skill-context-doctor optimize --keep xlsx --keep video-translation
+
+# Protect skills via persistent keep file (~/.config/skill-context-doctor/keep)
+echo "my-custom-skill" >> ~/.config/skill-context-doctor/keep
+skill-context-doctor optimize
+
+# Revert the latest optimization run
+skill-context-doctor undo latest
+```
+
+```text
+Skill Context Doctor
+
+Skill Context Doctor - Optimize (Dry Run)
+Target: Hide model-visible skills that are unused or heavy stale
+
+Planned Actions (HIDE)
+  Skills to hide:        87
+  Estimated savings:     ~6.2K tokens (6,218 tokens)
+  Protected by --keep:   2
+  Skipped (review/dup):  142
+
+High Impact Skills to Hide:
+
+Skill                            Visible Tokens   Confidence   Reasons
+------------------------------   --------------   ----------   ----------------------------------------
+docx                                        197   medium       MODEL_VISIBLE, STALE_USAGE, CONTEXT_OVERHEAD
+talking-head-guide                          195   high         MODEL_VISIBLE, NEVER_USED, HIGH_CONTEXT_COST
+digital-human                               187   high         MODEL_VISIBLE, NEVER_USED, HIGH_CONTEXT_COST
+product-help                                175   high         MODEL_VISIBLE, NEVER_USED, HIGH_CONTEXT_COST
+pptx                                        174   high         MODEL_VISIBLE, NEVER_USED, HIGH_CONTEXT_COST
+voice                                       149   medium       MODEL_VISIBLE, STALE_USAGE, CONTEXT_OVERHEAD
+
+Removal Candidates (Manual Review)
+  21 removal candidates available (already hidden & never used).
+  Use `skill-context-doctor cleanup` to review and quarantine them.
+
+No files changed. Run with --apply to execute.
+```
+
 ### Common Commands
 
 ```bash
+# Safe context optimization (dry-run)
+skill-context-doctor optimize
+skill-context-doctor optimize --apply
+skill-context-doctor optimize --keep my-skill
+skill-context-doctor undo latest
+
 # Actionable recommendations
 skill-context-doctor recommend
 skill-context-doctor recommend --json
@@ -163,7 +225,7 @@ skill-context-doctor --source cursor
 # Output structured JSON for automation
 skill-context-doctor list --json
 
-# Exclude trusted skills
+# Exclude trusted skills from cleanup review
 skill-context-doctor --omit "my-special-skill"
 skill-context-doctor omit "ck-*"
 
@@ -223,7 +285,7 @@ v0.1 Audit (Completed)
   │  └── Safe quarantine & undo
   │
   ▼
-v0.2 Recommend (Current)
+v0.2 Recommend (Completed)
   │  ├── Deterministic recommendations: KEEP / HIDE / REVIEW / REMOVE CANDIDATE
   │  ├── 11-step rule hierarchy built directly on audit facts
   │  ├── Context token savings estimation for HIDE candidates
@@ -231,10 +293,13 @@ v0.2 Recommend (Current)
   │  └── Structured JSON report (`recommend --json`)
   │
   ▼
-v0.3 Optimize
-  │  ├── Dynamic context budgeting
-  │  ├── Lazy skill loading & description trimming
-  │  └── System prompt compression
+v0.3 Optimize (Completed)
+  │  ├── Two-phase transactional execution (`optimize --apply`)
+  │  ├── Immutable manifest & byte-exact backups
+  │  ├── Conservative frontmatter patching (`disable-model-invocation: true`)
+  │  ├── Exact-name keep whitelist (`--keep` and keep file)
+  │  ├── Canonical target multi-identity conflict protection
+  │  └── Hash-guarded safe undo against user post-optimize edits
   │
   ▼
 v0.4 Cross-Agent Governance
