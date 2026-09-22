@@ -12,8 +12,6 @@ on:
           - "false"
           - "true"
   push:
-    branches:
-      - main
     tags:
       - "v*.*.*"
 
@@ -27,20 +25,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
-          cache: npm
 
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Install
-        run: npm ci
+        run: npm ci --no-audit
 
       - name: Test
         run: npm test
@@ -58,8 +55,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Check NPM_TOKEN
+        if: ${{ env.NODE_AUTH_TOKEN == '' && (github.event_name == 'push' || inputs.dry_run == 'false') }}
+        run: |
+          echo "::warning::NPM_TOKEN secret is not configured in repository secrets. Skipping npm publish."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish
-        if: ${{ github.event_name == 'push' || inputs.dry_run == 'false' }}
+        if: ${{ env.NODE_AUTH_TOKEN != '' && (github.event_name == 'push' || inputs.dry_run == 'false') }}
         run: |
           npm publish --access public --provenance
         env:
