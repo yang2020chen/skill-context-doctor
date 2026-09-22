@@ -248,6 +248,7 @@ export function shouldRunInteractive(options, io = {}) {
   if (
     options.noInteractive ||
     options.command === "list" ||
+    options.command === "audit" ||
     options.apply ||
     options.commands ||
     options.json ||

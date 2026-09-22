@@ -47,7 +47,7 @@ export const DEFAULT_OPTIONS = {
 };
 
 export const INTERACTIVE_UNDO = "__interactive_undo__";
-const COMMANDS = new Set(["list", "cleanup", "omit", "undo"]);
+const COMMANDS = new Set(["list", "cleanup", "omit", "undo", "audit"]);
 
 export function expandHome(value, home = os.homedir()) {
   if (!value) return value;
@@ -101,6 +101,7 @@ export function printHelp() {
 Usage: skill-context-doctor [command] [options]
 
 Commands:
+  audit                          Generate unified health & context overhead report
   list                           Scan skills and print the normal report
   cleanup                        Scan skills, optionally with --apply
   omit <skill-or-pattern>         Add persistent omit patterns
@@ -281,6 +282,9 @@ export function parseArgs(argv) {
   }
   if (options.command === "list" && options.apply) {
     throw new Error("skill-context-doctor list cannot be combined with --apply");
+  }
+  if (options.command === "audit" && options.apply) {
+    throw new Error("skill-context-doctor audit cannot be combined with --apply");
   }
 
   if (!["codex", "claude", "opencode", "cursor", "filesystem", "pi", "all"].includes(options.source)) {

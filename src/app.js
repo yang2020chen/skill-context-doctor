@@ -1,4 +1,5 @@
 import { INTERACTIVE_UNDO, parseArgs, printHelp } from "./args.js";
+import { buildAuditReport, formatAuditReport } from "./audit.js";
 import { formatCleanupResult } from "./cleanup-result.js";
 import { shouldUseLinks } from "./format.js";
 import { buildRows, payloadFor } from "./model.js";
@@ -97,6 +98,16 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const modelOptions = { ...options, now, omitPatterns };
   const rows = buildRows(skills, modelOptions);
   const payload = payloadFor(rows, modelOptions, scanStats, now);
+
+  if (options.command === "audit") {
+    const auditReport = buildAuditReport(skills, rows, { ...options, now });
+    if (options.json) {
+      write(stdout, `${JSON.stringify(auditReport, null, 2)}\n`);
+    } else {
+      write(stdout, formatAuditReport(auditReport, { ...options, now }));
+    }
+    return auditReport;
+  }
 
   if (options.csv) writeCsv(options.csv, rows);
   if (options.snapshot) writeSnapshot(options.snapshot, payload, options);

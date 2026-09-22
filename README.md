@@ -48,6 +48,10 @@ Without an audit trail, stale skills silently waste input context window and API
 Run instantly with `npx`:
 
 ```bash
+# Run unified health & context overhead audit
+npx skill-context-doctor audit
+
+# Open interactive skill review
 npx skill-context-doctor
 ```
 
@@ -55,12 +59,54 @@ Or install globally:
 
 ```bash
 npm install --global skill-context-doctor
-skill-context-doctor
+skill-context-doctor audit
+```
+
+### Health Audit Report (`audit`)
+
+`skill-context-doctor audit` provides an objective, unified health report and ranks top context consumers:
+
+```text
+Skill Context Doctor
+
+Evidence sources detected: Pi, Claude Code, Codex, OpenCode
+
+Skills & Installation Health
+  Skills discovered         107
+  Installations             125
+  Model-visible              16
+  Actually used              22
+    ↳ Stale (idle >45d)       7
+  Never used                 85
+  Duplicate groups            9 (18 extra copies)
+  Broken installations        2
+
+Estimated Context Overhead
+  Visible skill metadata    ~3.0K tokens (3,007 tokens)
+
+Usage Sources Breakdown
+  Pi                22 skills (91 events)
+  Claude Code        5 skills (14 events)
+
+Top Context Consumers (Model-Visible)
+
+Skill                            Visible Tokens    Usage   Last Used
+------------------------------   --------------   ------   ----------------
+hyperframes-registry                        223          0   -
+hyperframes                                 198          4   2026-09-18 16:04
+talking-head-recut                          113          2   2026-09-18 16:00
+faceless-explainer                           97          1   2026-07-20 09:57
+github-ops                                   82          0   -
 ```
 
 ### Common Commands
 
 ```bash
+# Unified health & context overhead audit
+skill-context-doctor audit
+skill-context-doctor audit --json
+skill-context-doctor audit --source pi
+
 # Audit specific skill roots
 skill-context-doctor --path ~/.agents/skills
 skill-context-doctor --path ~/.agents/skills --path ~/.claude/skills
