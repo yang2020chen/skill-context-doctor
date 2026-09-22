@@ -4,9 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const binTarget = path.join(root, "bin", "skillkill.js");
+const binTarget = path.join(root, "bin", "skill-context-doctor.js");
 const binDir = path.join(os.homedir(), ".local", "bin");
-const commands = ["skillkill", "skill-kill", "skill-cleanup", "skill-prune"];
+const commands = ["skill-context-doctor"];
 
 fs.mkdirSync(binDir, { recursive: true });
 
@@ -25,4 +25,4 @@ for (const command of commands) {
   console.log(`${linkPath} -> ${binTarget}`);
 }
 
-console.log(`\nLinked local skillkill commands. Ensure ${binDir} is in PATH.`);
+console.log(`\nLinked local skill-context-doctor commands. Ensure ${binDir} is in PATH.`);

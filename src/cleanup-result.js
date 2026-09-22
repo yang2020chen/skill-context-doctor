@@ -81,7 +81,7 @@ export function formatCleanupResult(result, options = {}) {
     lines.push(color.danger("  Permanent delete does not write an undo manifest."));
   } else {
     lines.push(`  Manifest: ${color.dim(result.manifest)}`);
-    lines.push(`  Command: ${color.info(`skillkill --undo ${result.manifest}`)}`);
+    lines.push(`  Command: ${color.info(`skill-context-doctor --undo ${result.manifest}`)}`);
   }
 
   return `${lines.join("\n")}\n`;

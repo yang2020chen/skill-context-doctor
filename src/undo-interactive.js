@@ -38,7 +38,7 @@ export function renderInteractiveUndoScreen(runs, state = {}, dimensions = {}) {
   const selectedRun = runs[cursor];
 
   const lines = [
-    color.title("skillkill interactive undo"),
+    color.title("skill-context-doctor interactive undo"),
     color.dim(`${runs.length} cleanup runs`),
     "",
     color.header(

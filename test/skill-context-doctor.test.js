@@ -71,7 +71,7 @@ async function waitForOutput(stdout, pattern) {
 }
 
 function makeFixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillkill-test-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-context-doctor-test-"));
   const skillsDir = path.join(root, "skills");
   const claudeSkillsDir = path.join(root, ".claude", "skills");
   const codexSkillsDir = path.join(root, ".codex", "skills");
@@ -184,7 +184,7 @@ test("defaults to common installed skill roots and allows repeatable path overri
   assert.deepEqual(custom.skillsDirs, ["/tmp/one", "/tmp/two"]);
   assert.equal(custom.skillsDir, "/tmp/one");
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillkill-plugin-root-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-context-doctor-plugin-root-"));
   const pluginSkills = path.join(
     root,
     "codex",
@@ -276,7 +276,7 @@ test("falls back to a full JSONL scan when ripgrep is unavailable", () => {
   const result = spawnSync(
     process.execPath,
     [
-      path.resolve("bin/skillkill.js"),
+      path.resolve("bin/skill-context-doctor.js"),
       "--path",
       fixture.skillsDir,
       "--codex-dir",
@@ -1176,7 +1176,7 @@ test("formats cleanup commands for candidates only", async () => {
   assert.doesNotMatch(commands, /\.system-skill/);
 
   const table = formatTable(rows, 5, { recentNewChats: 2 });
-  assert.match(table, /###### ##  ## #### ##     ##/);
+  assert.match(table, /Skill Context Doctor/);
   assert.doesNotMatch(table, /stale skill cleanup, with receipts/);
   assert.match(table, /30d burn/);
   assert.match(table, /30d burn = description tokens multiplied by 2 new chats/);
@@ -1190,18 +1190,8 @@ test("formats cleanup commands for candidates only", async () => {
   assert.match(linkedTable, /\x1b]8;;file:\/\//);
 });
 
-test("renders the ascii logo", () => {
-  assert.equal(
-    renderLogo(),
-    [
-      "###### ##  ## #### ##     ##     ##  ## #### ##     ##",
-      "##     ## ##   ##  ##     ##     ## ##   ##  ##     ##",
-      "###### ####    ##  ##     ##     ####    ##  ##     ##",
-      "    ## ## ##   ##  ##     ##     ## ##   ##  ##     ##",
-      "###### ##  ## #### ###### ###### ##  ## #### ###### ######",
-      "  ....   ..     ..     ..     ..   ..     ..     ..     ..",
-    ].join("\n"),
-  );
+test("renders the logo", () => {
+  assert.equal(renderLogo(), "Skill Context Doctor");
 });
 
 test("omits cleanup candidates from cli patterns and omit files", async () => {
@@ -1431,7 +1421,7 @@ test("direct cleanup apply and undo latest commands work", async () => {
   assert.match(cleanupStdout, /Done: Quarantined 2 skills/);
   assert.match(cleanupStdout, /Saved per skill-catalog load: 22 description tokens/);
   assert.match(cleanupStdout, /Potential new-chat savings: 22 x 1 new chat in last 30 days = 22 tokens/);
-  assert.match(cleanupStdout, /Command: skillkill --undo /);
+  assert.match(cleanupStdout, /Command: skill-context-doctor --undo /);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("stale-skill"))), false);
   assert.equal(fs.existsSync(path.dirname(fixture.skillPath("never-used"))), false);
 
@@ -1452,7 +1442,7 @@ test("formats cleanup result with colors and token savings", () => {
     {
       mode: "quarantine",
       count: 1,
-      manifest: "/tmp/skillkill/run/manifest.json",
+      manifest: "/tmp/skill-context-doctor/run/manifest.json",
       recentNewChats: 3,
       entries: [
         {
@@ -1474,7 +1464,7 @@ test("formats cleanup result with colors and token savings", () => {
   assert.match(output, /Potential new-chat savings: \x1b\[33m11,198\x1b\[0m x \x1b\[36m3\x1b\[0m new chats in last 30 days = \x1b\[1;32m33,594\x1b\[0m tokens/);
   assert.match(output, /Observed selected-use prompt cost removed: \x1b\[33m22,396\x1b\[0m tokens/);
   assert.match(output, /Mentions in window: \x1b\[2m1,000\x1b\[0m/);
-  assert.match(output, /Command: \x1b\[36mskillkill --undo \/tmp\/skillkill\/run\/manifest\.json\x1b\[0m/);
+  assert.match(output, /Command: \x1b\[36mskill-context-doctor --undo \/tmp\/skill-context-doctor\/run\/manifest\.json\x1b\[0m/);
 });
 
 test("renders interactive cleanup candidates", async () => {
@@ -1503,7 +1493,7 @@ test("renders interactive cleanup candidates", async () => {
     { columns: 120, rows: 24 },
   );
 
-  assert.match(screen, /###### ##  ## #### ##     ##/);
+  assert.match(screen, /Skill Context Doctor/);
   assert.doesNotMatch(screen, /stale skill cleanup, with receipts/);
   assert.match(screen, /interactive cleanup/);
   assert.match(screen, /2 cleanup candidates/);
@@ -1526,7 +1516,7 @@ test("renders interactive cleanup candidates", async () => {
   );
 
   assert.match(colorScreen, /\x1b\[/);
-  assert.match(colorScreen, /\x1b\[1;36m###### ##  ## #### ##     ##/);
+  assert.match(colorScreen, /\x1b\[1;36mSkill Context Doctor/);
 
   const linkedScreen = renderInteractiveScreen(
     rows,
@@ -1570,7 +1560,7 @@ test("renders interactive cleanup candidates", async () => {
     { columns: 120, rows: 24 },
   );
 
-  assert.match(confirmScreen, /skillkill confirm cleanup/);
+  assert.match(confirmScreen, /skill-context-doctor confirm cleanup/);
   assert.match(confirmScreen, /You are going to remove 1 skill from active use/);
   assert.match(confirmScreen, /stale-skill/);
   assert.match(confirmScreen, /paths: .*stale-skill\/SKILL\.md/);
@@ -1600,7 +1590,7 @@ test("renders interactive cleanup candidates", async () => {
     { columns: 120, rows: 24 },
   );
 
-  assert.match(deleteScreen, /skillkill confirm permanent delete/);
+  assert.match(deleteScreen, /skill-context-doctor confirm permanent delete/);
   assert.match(deleteScreen, /Type DELETE then press Enter to permanently delete/);
   assert.match(deleteScreen, /DELETE confirmation: dele/);
 });
@@ -1772,7 +1762,7 @@ test("interactive e2e selects with enter and quarantines confirmed rows", async 
   await waitForOutput(stdout, /Keys: \/ search/);
   press(stdin, "space", " ");
   press(stdin, "enter", "\r");
-  await waitForOutput(stdout, /skillkill confirm cleanup/);
+  await waitForOutput(stdout, /skill-context-doctor confirm cleanup/);
   assert.match(stdout.output, /You are going to remove 1 skill from active use/);
   assert.match(stdout.output, /11 tokens saved per new conversation/);
   assert.match(stdout.output, /1 conversation in the last 30 days/);
@@ -1824,9 +1814,9 @@ test("interactive e2e permanently deletes only after typed confirmation", async 
   await waitForOutput(stdout, /Keys: \/ search/);
   press(stdin, "space", " ");
   press(stdin, "enter", "\r");
-  await waitForOutput(stdout, /skillkill confirm cleanup/);
+  await waitForOutput(stdout, /skill-context-doctor confirm cleanup/);
   press(stdin, "d", "d");
-  await waitForOutput(stdout, /skillkill confirm permanent delete/);
+  await waitForOutput(stdout, /skill-context-doctor confirm permanent delete/);
   press(stdin, "enter", "\r");
   await waitForOutput(stdout, /Type DELETE to permanently delete or Esc to review/);
   for (const char of "delete") press(stdin, char, char);
@@ -1887,7 +1877,7 @@ test("interactive e2e filters with slash search before cleanup", async () => {
   press(stdin, "enter", "\r");
   press(stdin, "space", " ");
   press(stdin, "enter", "\r");
-  await waitForOutput(stdout, /skillkill confirm cleanup/);
+  await waitForOutput(stdout, /skill-context-doctor confirm cleanup/);
   press(stdin, "enter", "\r");
 
   const result = await run;
@@ -2252,7 +2242,7 @@ test("interactive undo restores a selected cleanup run", async () => {
     },
   );
 
-  await waitForOutput(stdout, /skillkill interactive undo/);
+  await waitForOutput(stdout, /skill-context-doctor interactive undo/);
   assert.match(stdout.output, /2\s+available/);
   press(stdin, "enter", "\r");
   await waitForOutput(stdout, /! REVIEW RESTORE/);
@@ -2276,20 +2266,20 @@ test("renders interactive undo colors only when enabled", () => {
       id: "2026-06-15T00-00-00Z",
       createdAt: "2026-06-15T00:00:00Z",
       entries: [{ originalPath: "/tmp/skill", quarantinedPath: "/tmp/run/skill" }],
-      manifest: "/tmp/skillkill/manifest.json",
+      manifest: "/tmp/skill-context-doctor/manifest.json",
       restoredAt: "",
       skipped: [],
     },
   ];
 
   const screen = renderInteractiveUndoScreen(runs, {}, { columns: 120, rows: 24 });
-  assert.match(screen, /skillkill interactive undo/);
+  assert.match(screen, /skill-context-doctor interactive undo/);
   assert.match(screen, /available/);
   assert.doesNotMatch(screen, /\x1b\[/);
 
   const colorScreen = renderInteractiveUndoScreen(runs, {}, { columns: 120, rows: 24, colors: true });
   assert.match(colorScreen, /\x1b\[/);
-  assert.match(colorScreen, /\x1b\[1;36mskillkill interactive undo\x1b\[0m/);
+  assert.match(colorScreen, /\x1b\[1;36mskill-context-doctor interactive undo\x1b\[0m/);
 });
 
 test("bare undo requires a tty", async () => {

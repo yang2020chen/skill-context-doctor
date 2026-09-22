@@ -31,5 +31,5 @@ export function hyperlink(label, href, enabled) {
 }
 
 export function shouldUseLinks(stream) {
-  return Boolean(stream?.isTTY && !process.env.SKILLKILL_NO_LINKS);
+  return Boolean(stream?.isTTY && !process.env.SKILL_CONTEXT_DOCTOR_NO_LINKS);
 }

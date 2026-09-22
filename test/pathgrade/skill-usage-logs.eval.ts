@@ -87,7 +87,7 @@ function writeJsonl(file: string, rows: unknown[]) {
 }
 
 function makeScannerFixture(provider: string, mode: string) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `skillkill-eval-${provider}-${mode}-`));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `skill-context-doctor-eval-${provider}-${mode}-`));
   const skillPath = copySkill(path.join(root, ".agents", "skills"));
   return { root, skillPath };
 }

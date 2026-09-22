@@ -946,7 +946,7 @@ function processMatchedJsonLine(item, stats, onRecord) {
 }
 
 function fixedPatternFile(patterns) {
-  const file = path.join(process.env.TMPDIR || "/tmp", `skillkill-rg-${crypto.randomUUID()}.txt`);
+  const file = path.join(process.env.TMPDIR || "/tmp", `skill-context-doctor-rg-${crypto.randomUUID()}.txt`);
   fs.writeFileSync(file, `${patterns.join("\n")}\n`);
   return file;
 }

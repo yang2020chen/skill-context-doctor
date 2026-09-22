@@ -1,16 +1,32 @@
 {
-  "name": "skillkill",
-  "version": "0.3.10",
-  "description": "Audit and clean up stale local agent skills.",
+  "name": "skill-context-doctor",
+  "version": "0.1.0",
+  "description": "Audit real AI agent skill usage, context overhead, stale skills, duplicates, and broken installations.",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vltansky/skillkill.git"
+    "url": "git+https://github.com/yang2020chen/skill-context-doctor.git"
   },
   "bugs": {
-    "url": "https://github.com/vltansky/skillkill/issues"
+    "url": "https://github.com/yang2020chen/skill-context-doctor/issues"
   },
-  "homepage": "https://github.com/vltansky/skillkill#readme",
+  "homepage": "https://github.com/yang2020chen/skill-context-doctor#readme",
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "context",
+    "tokens",
+    "claude",
+    "codex",
+    "pi",
+    "opencode",
+    "cursor",
+    "audit",
+    "diagnostics",
+    "cleanup"
+  ],
+  "author": "yang2020chen <yang2020chen@users.noreply.github.com>",
   "files": [
     "assets",
     "bin",
@@ -20,18 +36,15 @@
     "LICENSE"
   ],
   "bin": {
-    "skillkill": "bin/skillkill.js",
-    "skill-kill": "bin/skillkill.js",
-    "skill-cleanup": "bin/skillkill.js",
-    "skill-prune": "bin/skillkill.js"
+    "skill-context-doctor": "bin/skill-context-doctor.js"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:pathgrade": "PATHGRADE_CODEX_TRANSPORT=exec pathgrade run --diagnostics -- --config vitest.config.mts",
     "link:local": "node scripts/link-local.mjs",
-    "check": "node --check bin/skillkill.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/scan.js && node --check src/scan-cache.js && node --check src/scan-worker.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js && node --check packages/skill-cleanup/bin/skill-cleanup.js && node --check packages/skill-prune/bin/skill-prune.js",
+    "check": "node --check bin/skill-context-doctor.js && node --check scripts/link-local.mjs && node --check src/app.js && node --check src/cleanup-result.js && node --check src/format.js && node --check src/interactive.js && node --check src/logo.js && node --check src/scan.js && node --check src/scan-cache.js && node --check src/scan-worker.js && node --check src/undo-interactive.js && node --check src/quarantine.js && node --check src/vercel-lock.js && node --check src/omit.js",
     "lint": "npm run check",
-    "build": "npm pack --dry-run && npm pack ./packages/skill-cleanup --dry-run && npm pack ./packages/skill-prune --dry-run"
+    "build": "npm pack --dry-run"
   },
   "license": "MIT",
   "devDependencies": {

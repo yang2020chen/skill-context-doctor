@@ -449,14 +449,14 @@ function renderConfirmationScreen(rows, state = {}, dimensions = {}) {
   const pathWidth = Math.max(24, width - 10);
 
   const lines = [
-    color.warn(deleteMode ? "skillkill confirm permanent delete" : "skillkill confirm cleanup"),
+    color.warn(deleteMode ? "skill-context-doctor confirm permanent delete" : "skill-context-doctor confirm cleanup"),
     "",
     deleteMode
       ? color.danger(`You are going to permanently delete ${formatNumber(picked.length)} ${plural(picked.length, "skill")} from active use.`)
       : color.danger(`You are going to remove ${formatNumber(picked.length)} ${plural(picked.length, "skill")} from active use and move them to quarantine.`),
     deleteMode
       ? color.danger("This does not write an undo manifest.")
-      : color.dim("This is undoable with skillkill --undo."),
+      : color.dim("This is undoable with skill-context-doctor --undo."),
     "",
     color.header("Selected skills:"),
   ];

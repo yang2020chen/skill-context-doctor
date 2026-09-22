@@ -35,9 +35,9 @@ export const DEFAULT_OPTIONS = {
   json: false,
   csv: "",
   snapshot: "",
-  stateDir: "~/.local/state/skillkill",
+  stateDir: "~/.local/state/skill-context-doctor",
   omitPatterns: [],
-  omitFile: "~/.config/skillkill/omit",
+  omitFile: "~/.config/skill-context-doctor/omit",
   noOmitFile: false,
   commands: false,
   interactive: false,
@@ -98,7 +98,7 @@ function codexPluginSkillRoots(codexDir) {
 export function printHelp() {
   return `${renderLogo()}
 
-Usage: skillkill [command] [options]
+Usage: skill-context-doctor [command] [options]
 
 Commands:
   list                           Scan skills and print the normal report
@@ -128,11 +128,11 @@ Options:
   --json                          Print JSON payload to stdout
   --csv PATH                      Write CSV rows
   --snapshot PATH                 Append a JSONL snapshot
-  --state-dir PATH                Cleanup state directory (default: ~/.local/state/skillkill)
+  --state-dir PATH                Cleanup state directory (default: ~/.local/state/skill-context-doctor)
   --omit PATTERN                  Omit skill name/path from cleanup candidates
   --whitelist PATTERN             Alias for --omit
   --allowlist PATTERN             Alias for --omit
-  --omit-file PATH                Omit file (default: ~/.config/skillkill/omit)
+  --omit-file PATH                Omit file (default: ~/.config/skill-context-doctor/omit)
   --no-omit-file                  Ignore the default omit file
   --interactive                   Force interactive terminal review
   --no-interactive                Print the static table instead of terminal review
@@ -145,9 +145,8 @@ Options:
 Default skill roots are ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.cursor/skills, and ~/.pi/agent/skills.
 Default behavior is interactive when stdin/stdout are terminals, otherwise static dry-run.
 --apply writes an undo manifest; restore interactively with --undo or directly with --undo latest.
-Direct forms are also available: skillkill list --json, skillkill cleanup --apply,
-skillkill omit simplify, skillkill undo latest.
-Command aliases: skill-kill, skill-cleanup, skill-prune.
+Direct forms are also available: skill-context-doctor list --json, skill-context-doctor cleanup --apply,
+skill-context-doctor omit simplify, skill-context-doctor undo latest.
 `;
 }
 
@@ -262,26 +261,26 @@ export function parseArgs(argv) {
 
   if (options.command === "undo") {
     if (options.undo && options.commandArgs.length > 0) {
-      throw new Error("skillkill undo cannot be combined with --undo");
+      throw new Error("skill-context-doctor undo cannot be combined with --undo");
     }
     if (options.commandArgs.length > 1) {
-      throw new Error("skillkill undo accepts at most one target");
+      throw new Error("skill-context-doctor undo accepts at most one target");
     }
     options.undo = options.commandArgs[0] || options.undo || INTERACTIVE_UNDO;
   }
   if (options.command === "omit") {
     if (options.commandArgs.length === 0) {
-      throw new Error("skillkill omit requires at least one skill or pattern");
+      throw new Error("skill-context-doctor omit requires at least one skill or pattern");
     }
     if (options.noOmitFile) {
-      throw new Error("skillkill omit writes to the omit file; remove --no-omit-file");
+      throw new Error("skill-context-doctor omit writes to the omit file; remove --no-omit-file");
     }
     if (options.apply || options.undo || options.commands || options.json || options.csv || options.snapshot) {
-      throw new Error("skillkill omit cannot be combined with scan/output/apply options");
+      throw new Error("skill-context-doctor omit cannot be combined with scan/output/apply options");
     }
   }
   if (options.command === "list" && options.apply) {
-    throw new Error("skillkill list cannot be combined with --apply");
+    throw new Error("skill-context-doctor list cannot be combined with --apply");
   }
 
   if (!["codex", "claude", "opencode", "cursor", "filesystem", "pi", "all"].includes(options.source)) {

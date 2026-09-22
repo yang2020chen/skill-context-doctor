@@ -13,7 +13,7 @@ on:
           - "true"
   push:
     branches:
-      - master
+      - main
     tags:
       - "v*.*.*"
 
@@ -55,8 +55,6 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
         run: |
           npm publish --dry-run --access public --provenance
-          npm publish ./packages/skill-cleanup --dry-run --access public --provenance
-          npm publish ./packages/skill-prune --dry-run --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -64,7 +62,5 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.dry_run == 'false' }}
         run: |
           npm publish --access public --provenance
-          npm publish ./packages/skill-cleanup --access public --provenance
-          npm publish ./packages/skill-prune --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

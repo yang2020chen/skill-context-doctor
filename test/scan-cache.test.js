@@ -11,7 +11,7 @@ import {
 } from "../src/scan-cache.js";
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skillkill-cache-test-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-context-doctor-cache-test-"));
   const stateDir = path.join(root, "state");
   const history = path.join(root, "history.jsonl");
   fs.writeFileSync(history, "{}\n");
