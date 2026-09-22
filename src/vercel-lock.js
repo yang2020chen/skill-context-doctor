@@ -52,6 +52,30 @@ function writeLockFile(lockPath, lock) {
   fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
 }
 
+export function readAllVercelLocks(options = {}) {
+  const entriesBySkill = new Map();
+  for (const lockPath of getVercelLockPaths(options)) {
+    const lock = readLockFile(lockPath);
+    if (!lock || !lock.skills) continue;
+    for (const [skillName, entry] of Object.entries(lock.skills)) {
+      const list = entriesBySkill.get(skillName) || [];
+      list.push({
+        source: entry.source || entry.pluginName || "",
+        sourceUrl: entry.sourceUrl || "",
+        sourceType: entry.sourceType || "",
+        skillPath: entry.skillPath || "",
+        lockFile: lockPath,
+        lockVersion: typeof lock.version === "number" ? lock.version : CURRENT_GLOBAL_VERSION,
+        installedAt: entry.installedAt || "",
+        updatedAt: entry.updatedAt || "",
+        entry,
+      });
+      entriesBySkill.set(skillName, list);
+    }
+  }
+  return entriesBySkill;
+}
+
 export function removeSkillsFromVercelLocks(skillNames, options = {}) {
   const names = new Set(skillNames);
   const entriesBySkill = new Map();

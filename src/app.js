@@ -18,6 +18,8 @@ import { runInteractive, shouldRunInteractive, startInteractiveLoading } from ".
 import { runInteractiveUndo } from "./undo-interactive.js";
 import { appendOmitPattern, loadOmitPatterns } from "./omit.js";
 import { quarantineCandidates, resolveUndoManifest, restoreCleanupRun } from "./quarantine.js";
+import { buildCrossAgentMap, formatCrossAgentMatrix, formatSkillDetailMap } from "./map.js";
+import { readAllVercelLocks } from "./vercel-lock.js";
 
 function write(stream, text) {
   stream.write(text);
@@ -143,7 +145,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     } else {
       skills = collectSkills(options.skillsDirs);
       const scanEvidenceOptions =
-        options.command === "recommend" || options.command === "optimize"
+        options.command === "recommend" || options.command === "optimize" || options.command === "map"
           ? { ...options, source: "all", now }
           : { ...options, now };
       scanStats = await scanEvidence(skills, scanEvidenceOptions);
@@ -210,6 +212,34 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       write(stdout, formatOptimizeReport(plan, options));
     }
     return plan;
+  }
+
+  if (options.command === "map") {
+    const lockEntries = readAllVercelLocks(options);
+    const mapReport = buildCrossAgentMap(skills, lockEntries, { ...options, now });
+    const targetSkill = options.commandArgs[0] || (options.onlyPatterns && options.onlyPatterns[0]);
+
+    if (targetSkill) {
+      const item = mapReport.skills.find(
+        (s) => s.skill.toLowerCase() === targetSkill.toLowerCase(),
+      );
+      if (!item) {
+        throw new Error(`Skill "${targetSkill}" not found in installations, lockfiles, or usage history.`);
+      }
+      if (options.json) {
+        write(stdout, `${JSON.stringify(item, null, 2)}\n`);
+      } else {
+        write(stdout, formatSkillDetailMap(item));
+      }
+      return item;
+    }
+
+    if (options.json) {
+      write(stdout, `${JSON.stringify(mapReport, null, 2)}\n`);
+    } else {
+      write(stdout, formatCrossAgentMatrix(mapReport, options));
+    }
+    return mapReport;
   }
 
   if (options.csv) writeCsv(options.csv, rows);
